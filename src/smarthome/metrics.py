@@ -60,7 +60,7 @@ def room_metrics(y_true, y_pred, rooms: list[str]) -> dict:
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "macro_f1": float(report["macro avg"]["f1-score"]),
-        "confusion_matrix": confusion_matrix(y_true, y_pred).tolist(),
+        "confusion_matrix": confusion_matrix(y_true, y_pred, labels=labels).tolist(),
         "classification_report": report,
     }
 

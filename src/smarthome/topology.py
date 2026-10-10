@@ -33,13 +33,31 @@ class TopologyFilter:
 
     def update(self, emission_probs: np.ndarray) -> np.ndarray:
         p = np.asarray(emission_probs, dtype=np.float32)
-        p = p / max(float(p.sum()), 1e-8)
+        total = float(p.sum())
+        if not np.isfinite(total) or total <= 1e-12:
+            # A degenerate emission (all zeros, NaN, +inf) must not zero out the
+            # posterior: every later update would collapse to zero as well and
+            # argmax would then always return the first room.
+            p = np.full(p.shape, 1.0 / max(p.size, 1), dtype=np.float32)
+        else:
+            p = p / total
         if self.posterior is None:
             self.posterior = p
         else:
             prior = self.posterior @ self.transition
             post = prior * p
-            self.posterior = post / max(float(post.sum()), 1e-8)
+            post_total = float(post.sum())
+            if not np.isfinite(post_total) or post_total <= 1e-12:
+                # Carry the last normalised belief forward instead of
+                # permanently poisoning the filter with a single bad reading.
+                prior_total = float(prior.sum())
+                if np.isfinite(prior_total) and prior_total > 1e-12:
+                    post = prior / prior_total
+                else:
+                    post = np.full(prior.shape, 1.0 / max(prior.size, 1), dtype=np.float32)
+            else:
+                post = post / post_total
+            self.posterior = post
         return self.posterior.copy()
 
 

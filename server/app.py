@@ -113,11 +113,15 @@ def bearer_device() -> dict | None:
 
 
 def request_home_context() -> tuple[dict | None, dict | None]:
-    device = bearer_device()
-    if device:
+    if request.headers.get("Authorization", ""):
+        # A supplied credential must authenticate: never silently downgrade an
+        # invalid bearer token to the browser session.
+        device = bearer_device()
+        if device is None:
+            return None, None
         with db.connect() as connection:
             home = connection.execute("SELECT * FROM homes WHERE id=?", (device["home_id"],)).fetchone()
-            return (dict(home) if home else None), device
+        return (dict(home) if home else None), device
     return active_home(), None
 
 
@@ -484,7 +488,8 @@ def sensor_status():
     if error:
         return error
     monitor = sensor_monitors.get(home["id"])
-    return jsonify(monitor.status(request.args.get("device_id")) if monitor else {"state": "NO_DATA"})
+    snapshot = monitor.status(request.args.get("device_id")) if monitor else None
+    return jsonify(snapshot or {"state": "NO_DATA"})
 
 
 @app.get("/api/status")
