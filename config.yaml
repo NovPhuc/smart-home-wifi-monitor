@@ -77,6 +77,9 @@ mobile_sensor:
   impact_followup_seconds: 20
   still_after_impact_seconds: 5
 
+alerts:
+  repeat_cooldown_seconds: 600
+
 calibration:
   target_samples_per_room: 100
   required_orientations: 3

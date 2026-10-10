@@ -20,8 +20,10 @@ from werkzeug.security import check_password_hash, generate_password_hash
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from smarthome.alerts import AlertThrottle
 from smarthome.config import load_config
 from smarthome.inference import SmartHomeInferenceEngine
+from smarthome.metrics import collect_model_metrics
 from smarthome.mobile_sensor import MobileSensorMonitor
 from smarthome.storage import SmartHomeDatabase
 
@@ -45,6 +47,9 @@ sensor_monitors: dict[int, MobileSensorMonitor] = {}
 last_results: dict[int, dict] = {}
 runtime_histories: dict[int, deque] = defaultdict(lambda: deque(maxlen=300))
 training_jobs: dict[int, dict] = {}
+alert_throttle = AlertThrottle(
+    cooldown_seconds=float(cfg.get("alerts", {}).get("repeat_cooldown_seconds", 600))
+)
 
 
 def calibration_settings() -> tuple[int, int, int]:
@@ -136,7 +141,12 @@ def persist_result(home_id: int, result: dict) -> None:
     last_results[home_id] = result
     if result.get("room"):
         db.save_prediction(home_id, result)
-    if result.get("status") in {"WARNING", "CRITICAL"}:
+    status = result.get("status")
+    # A sustained condition (long dwell, inactivity) produces an alert on every
+    # scan. Throttle repeats so the alerts table reflects events, not poll rate.
+    if status in {"WARNING", "CRITICAL"} and alert_throttle.should_emit(
+        home_id, status, result.get("reasons")
+    ):
         db.save_alert(home_id, {**result, "source": "wifi"})
 
 
@@ -532,20 +542,8 @@ def metrics():
     if error:
         return error
     model_dir = ROOT / "models" / "homes" / str(home["id"])
-
-    def read_json(path: Path) -> dict:
-        if not path.exists():
-            return {}
-        with path.open("r", encoding="utf-8") as handle:
-            return json.load(handle)
-
-    room = read_json(model_dir / "room_test_metrics.json")
     return jsonify({
-        "room_model": {
-            "accuracy": room.get("accuracy"), "macro_f1": room.get("macro_f1"),
-            "mean_inference_ms": room.get("mean_inference_ms_per_sample"),
-        },
-        "anomaly_model": {}, "baselines": {},
+        **collect_model_metrics(model_dir, ROOT / "models"),
         "data_notice": "Kết quả riêng của căn nhà đang chọn; chỉ xuất hiện sau khi huấn luyện.",
     })
 
@@ -622,6 +620,7 @@ def reset():
         last_results.pop(home["id"], None)
         runtime_histories.pop(home["id"], None)
         sensor_monitors.pop(home["id"], None)
+        alert_throttle.reset(home["id"])
         if home["id"] in home_engines:
             home_engines[home["id"]].reset()
         demo_engine.reset()

@@ -20,6 +20,8 @@ def _norm_room_name(name: str) -> str:
     return unicodedata.normalize("NFC", name.strip()).lower()
 
 
+SCHEMA_VERSION = 2
+
 SCHEMA = """
 PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;
@@ -153,18 +155,49 @@ class SmartHomeDatabase:
     def initialize(self) -> None:
         with self.connect() as connection:
             connection.executescript(SCHEMA)
-            # Migration: thêm cột _name_key cho các room đã có sẵn
-            existing = connection.execute("PRAGMA table_info(rooms)").fetchall()
-            columns = [row["name"] for row in existing]
-            if "_name_key" not in columns:
-                connection.execute("ALTER TABLE rooms ADD COLUMN _name_key TEXT NOT NULL DEFAULT ''")
-                connection.execute(
-                    "UPDATE rooms SET _name_key = LOWER(name) WHERE _name_key = ''"
-                )
-                connection.execute(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_home_name_key ON rooms(home_id, _name_key)"
-                )
-            connection.execute("PRAGMA user_version = 1")
+            version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+            if version < SCHEMA_VERSION:
+                self._migrate_rooms_name_key(connection)
+                connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+    @staticmethod
+    def _migrate_rooms_name_key(connection: sqlite3.Connection) -> None:
+        """Backfill ``rooms._name_key`` with the same normaliser used at runtime.
+
+        Databases written before ``_name_key`` existed, and databases migrated by
+        the earlier version of this method, filled the key with SQLite's
+        ``LOWER(name)``. ``LOWER()`` only folds ASCII ``A-Z``, so Vietnamese room
+        names with uppercase diacritics ("NHÀ VỆ SINH", "PHÒNG NGỦ") produced
+        keys that never matched :func:`_norm_room_name`, leaving already-collected
+        rooms unreachable. Recompute every key in Python and rebuild the unique
+        index so persistence and lookups agree.
+        """
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(rooms)").fetchall()}
+        if "_name_key" not in columns:
+            connection.execute("ALTER TABLE rooms ADD COLUMN _name_key TEXT NOT NULL DEFAULT ''")
+        # Drop the index while keys are rewritten so conflicting legacy rows are
+        # resolved before uniqueness is enforced again.
+        connection.execute("DROP INDEX IF EXISTS idx_rooms_home_name_key")
+        seen: dict[tuple[int, str], int] = {}
+        updates: list[tuple[str, int]] = []
+        for row in connection.execute(
+            "SELECT id, home_id, name, _name_key FROM rooms ORDER BY id"
+        ).fetchall():
+            key = _norm_room_name(row["name"])
+            scope = (int(row["home_id"]), key)
+            if scope in seen:
+                # Legacy rows can collapse to the same key ("Kitchen"/"kitchen").
+                # Keep the first and give the rest a stable suffix instead of
+                # failing to build the unique index at startup.
+                key = f"{key}#{row['id']}"
+            seen[scope] = int(row["id"])
+            if row["_name_key"] != key:
+                updates.append((key, int(row["id"])))
+        if updates:
+            connection.executemany("UPDATE rooms SET _name_key=? WHERE id=?", updates)
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_home_name_key ON rooms(home_id, _name_key)"
+        )
 
     @staticmethod
     def _dict(row: sqlite3.Row | None) -> dict | None:

@@ -9,6 +9,9 @@ const ACTIVITY = {
 };
 
 const state = {authenticated:false, me:null, rooms:[], devices:[], calibration:null, demoMode:false};
+// Cache the last rendered payloads so the 2s poll only touches the DOM when
+// something actually changed, instead of rebuilding every list each tick.
+let lastRenderKey = {status:'', history:'', alerts:''};
 let demoTimer = null;
 let pollTimer = null;
 let trainingTimer = null;
@@ -96,6 +99,7 @@ function renderHomes() {
 async function loadHome() {
   const [rooms,devices,calibration]=await Promise.all([api('/api/rooms'),api('/api/devices'),api('/api/calibration')]);
   state.rooms=rooms; state.devices=devices; state.calibration=calibration; state.demoMode=false;
+  lastRenderKey = {status:'', history:'', alerts:''};
   document.body.classList.remove('demo-mode');
   renderRooms(); renderDevices(); renderCalibration(calibration);
   await Promise.all([refreshDashboard(),api('/api/metrics').then(renderMetrics)]);
@@ -153,9 +157,9 @@ function renderStatus(status) {
 function compactHistory(history){const result=[];for(const item of history){const last=result.at(-1);if(!last||last.room!==item.room)result.push(item);else result[result.length-1]=item}return result.slice(-12).reverse()}
 function renderHistory(history){const items=compactHistory(history);$('historyCount').textContent=`${items.length} sự kiện`;$('history').innerHTML=items.map((item,index)=>`<div class="timeline-item ${index<items.length-1?'transition':''}"><time>${fmtTime(item.timestamp)}</time><strong>${escapeHTML(roomLabel(item.room))}</strong><span>${item.activity?.state==='ROOM_CHANGE'?'Chuyển phòng':fmtDuration(item.dwell_minutes)}</span></div>`).join('')||'<div class="empty-state">Dữ liệu hoạt động sẽ xuất hiện tại đây.</div>'}
 function renderAlerts(alerts){$('alertCount').textContent=alerts.length;$('alertsList').innerHTML=alerts.slice(-6).reverse().map(item=>`<div class="alert ${(item.status||'').toLowerCase()}"><strong>${escapeHTML(item.room||'Cảm biến')} • ${escapeHTML(item.status)}</strong><span>${escapeHTML((item.reasons||[]).map(translateReason).join(' · '))}</span></div>`).join('')||'<div class="empty-state">Chưa có cảnh báo.</div>'}
-function renderMetrics(metrics){const room=metrics.room_model||{},anomaly=metrics.anomaly_model||{};$('metricAccuracy').textContent=room.accuracy!=null?`${(room.accuracy*100).toFixed(2)}%`:'—';$('metricF1').textContent=room.macro_f1!=null?`${(room.macro_f1*100).toFixed(2)}%`:'—';$('metricRecall').textContent=anomaly.recall!=null?`${(anomaly.recall*100).toFixed(2)}%`:'Chưa train';$('metricLatency').textContent=room.mean_inference_ms!=null?`${room.mean_inference_ms.toFixed(3)} ms`:'—';$('baselineComparison').innerHTML='';}
+function renderMetrics(metrics){const room=metrics.room_model||{},anomaly=metrics.anomaly_model||{},baselines=metrics.baselines||{};$('metricAccuracy').textContent=room.accuracy!=null?`${(room.accuracy*100).toFixed(2)}%`:'—';$('metricF1').textContent=room.macro_f1!=null?`${(room.macro_f1*100).toFixed(2)}%`:'—';$('metricRecall').textContent=anomaly.recall!=null?`${(anomaly.recall*100).toFixed(2)}%`:'Chưa train';$('metricLatency').textContent=room.mean_inference_ms!=null?`${room.mean_inference_ms.toFixed(3)} ms`:'—';const comparisons=[['RoomNet-Lite',room.accuracy],...Object.entries(baselines).map(([name,values])=>[name,values?.accuracy])].filter(([,value])=>value!=null);$('baselineComparison').innerHTML=comparisons.map(([name,value])=>`<div><span>${escapeHTML(name)}</span><div><i style="width:${Math.min(100,Math.max(0,value*100))}%"></i></div><strong>${(value*100).toFixed(2)}%</strong></div>`).join('');}
 
-async function refreshDashboard(){if(!state.authenticated||document.hidden)return;try{const [status,history,alerts]=await Promise.all([api('/api/status'),api('/api/history'),api('/api/alerts')]);renderStatus(status);renderHistory(history);renderAlerts(alerts);setConnection(true,status.timestamp);}catch(error){if(error.status===401)showAuth();else setConnection(false);}}
+async function refreshDashboard(){if(!state.authenticated||document.hidden)return;try{const [status,history,alerts]=await Promise.all([api('/api/status'),api('/api/history'),api('/api/alerts')]);setConnection(true,status.timestamp);const statusKey=JSON.stringify([status.room,status.status,status.confidence,status.dwell_minutes,status.anomaly_score,status.timestamp,status.activity,status.signal,status.smoothed_probabilities,status.calibration,status.mobile_sensor]);if(statusKey!==lastRenderKey.status){lastRenderKey.status=statusKey;renderStatus(status);}const historyKey=JSON.stringify(history.map(item=>[item.timestamp,item.room,item.dwell_minutes,item.activity?.state]));if(historyKey!==lastRenderKey.history){lastRenderKey.history=historyKey;renderHistory(history);}const alertsKey=JSON.stringify(alerts.map(item=>item.id));if(alertsKey!==lastRenderKey.alerts){lastRenderKey.alerts=alertsKey;renderAlerts(alerts);}}catch(error){if(error.status===401)showAuth();else setConnection(false);}}
 
 async function demoStep(){try{await api('/api/demo/scan',{method:'POST',body:'{}'});await refreshDashboard();}catch(error){stopDemo();$('demoStatus').textContent=`Không chạy được demo: ${error.message}`;}}
 function stopDemo(){if(demoTimer)clearInterval(demoTimer);demoTimer=null;state.demoMode=false;document.body.classList.remove('demo-mode');$('demoToggle').classList.remove('running');$('demoToggle').textContent='Chạy demo';$('demoToggle').setAttribute('aria-pressed','false');if(state.calibration)renderCalibration(state.calibration);}

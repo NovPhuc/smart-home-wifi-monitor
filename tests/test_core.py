@@ -1,4 +1,6 @@
 from __future__ import annotations
+import json
+import sqlite3
 import numpy as np
 import pandas as pd
 import torch
@@ -8,6 +10,8 @@ from smarthome.models import RoomNetLite, GRUAutoencoder
 from smarthome.topology import build_transition_matrix, TopologyFilter
 from smarthome.dataset import AnomalyFeatureBuilder
 from smarthome.activity import ActivityMonitor
+from smarthome.alerts import AlertThrottle
+from smarthome.metrics import collect_model_metrics
 from smarthome.mobile_sensor import MobileSensorMonitor
 from smarthome.storage import SmartHomeDatabase
 
@@ -124,3 +128,84 @@ def test_sqlite_multi_home_calibration_and_device_token(tmp_path):
     assert progress["data_ready"] is True
     assert progress["localization_ready"] is False
     assert len(database.export_scans(home["id"])) == 18
+
+
+def test_room_key_migration_backfills_vietnamese_names(tmp_path):
+    path = tmp_path / "legacy.db"
+    connection = sqlite3.connect(path)
+    connection.executescript(
+        """
+        CREATE TABLE rooms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            home_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            max_dwell_minutes REAL NOT NULL DEFAULT 60,
+            created_at REAL NOT NULL
+        );
+        INSERT INTO rooms(home_id, name, max_dwell_minutes, created_at) VALUES
+            (1, 'NHÀ VỆ SINH', 30, 1),
+            (1, 'Phòng Ngủ', 720, 1),
+            (2, 'Kitchen', 45, 1),
+            (2, 'kitchen', 45, 1);
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    # Constructing the database runs the migration on the legacy rooms table.
+    database = SmartHomeDatabase(path)
+
+    # Runtime lookups use NFC+lowercase; SQL LOWER() would leave 'À'/'Ệ' uppercase
+    # and make these migrated rooms unreachable.
+    found = database.find_room_by_name(1, "nhà vệ sinh")
+    assert found is not None and found["name"] == "NHÀ VỆ SINH"
+    assert database.find_room_by_name(1, "PHÒNG NGỦ")["name"] == "Phòng Ngủ"
+
+    # Duplicate normalised names must still allow the unique index to build.
+    with database.connect() as connection:
+        keys = [row["_name_key"] for row in connection.execute(
+            "SELECT _name_key FROM rooms WHERE home_id=2 ORDER BY id"
+        ).fetchall()]
+    assert len(keys) == len(set(keys)) == 2
+    assert database.find_room_by_name(2, "kitchen")["name"] == "Kitchen"
+
+
+def test_alert_throttle_suppresses_repeats_and_escalates():
+    throttle = AlertThrottle(cooldown_seconds=600)
+    reasons = ["Long dwell in Bedroom: 45.3 min"]
+    assert throttle.should_emit(1, "WARNING", reasons, now=1000) is True
+    # Same condition, only the embedded measurement changed -> suppressed.
+    assert throttle.should_emit(1, "WARNING", ["Long dwell in Bedroom: 46.1 min"], now=1010) is False
+    # Escalation is surfaced immediately.
+    assert throttle.should_emit(1, "CRITICAL", ["Long dwell in Bedroom: 47.0 min"], now=1020) is True
+    # A genuinely new reason is surfaced even without escalation.
+    assert throttle.should_emit(1, "CRITICAL", ["Unusual nighttime movement"], now=1030) is True
+    assert throttle.should_emit(1, "CRITICAL", ["Unusual nighttime movement"], now=1040) is False
+    # After the cooldown the still-active condition resurfaces.
+    assert throttle.should_emit(1, "CRITICAL", ["Unusual nighttime movement"], now=1631) is True
+    # Different homes are tracked independently.
+    assert throttle.should_emit(2, "WARNING", reasons, now=1110) is True
+
+
+def test_collect_model_metrics_reads_home_and_shared_artifacts(tmp_path):
+    home = tmp_path / "home"
+    shared = tmp_path / "shared"
+    home.mkdir()
+    shared.mkdir()
+    (home / "room_test_metrics.json").write_text(
+        json.dumps({"accuracy": 0.9, "macro_f1": 0.88, "mean_inference_ms_per_sample": 0.5}),
+        encoding="utf-8",
+    )
+    (shared / "anomaly_test_metrics.json").write_text(
+        json.dumps({"hybrid_ae_plus_rules": {"precision": 0.7, "recall": 0.96, "f1": 0.8}, "threshold": 1.5}),
+        encoding="utf-8",
+    )
+    (shared / "baseline_metrics.json").write_text(
+        json.dumps({"kNN": {"accuracy": 0.98, "macro_f1": 0.97}}),
+        encoding="utf-8",
+    )
+    metrics = collect_model_metrics(home, shared)
+    assert metrics["room_model"] == {"accuracy": 0.9, "macro_f1": 0.88, "mean_inference_ms": 0.5}
+    assert metrics["anomaly_model"]["recall"] == 0.96
+    assert metrics["anomaly_model"]["threshold"] == 1.5
+    assert metrics["baselines"]["kNN"]["accuracy"] == 0.98
