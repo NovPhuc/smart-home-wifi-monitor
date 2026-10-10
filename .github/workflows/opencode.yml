@@ -30,4 +30,4 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
-          model: opencode/claude-fable-5-1
+          model: opencode/nemotron-3-ultra-free
