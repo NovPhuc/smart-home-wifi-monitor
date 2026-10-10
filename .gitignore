@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+server/__pycache__/
+data/raw/android_scans.jsonl
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/homes/
+models/homes/
+.env
+.ipynb_checkpoints/

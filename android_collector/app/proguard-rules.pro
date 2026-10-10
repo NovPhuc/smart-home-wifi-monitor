@@ -1,0 +1,2 @@
+-keep class com.example.wificollector.** { *; }
+-dontwarn com.example.wificollector.**

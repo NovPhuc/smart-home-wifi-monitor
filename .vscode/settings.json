@@ -1,0 +1,7 @@
+{
+    "python.analysis.extraPaths": ["${workspaceFolder}/src"],
+    "python.envFile": "${workspaceFolder}/.env",
+    "gradle.javaHome": "C:/Program Files/Android/Android Studio/jbr",
+    "java.import.gradle.java.home": "C:/Program Files/Android/Android Studio/jbr",
+    "gradle.nestedProjects": true
+}

@@ -1,0 +1,4 @@
+  File "E:\Downloads\smart-home-wifi-monitor1006\smart-home-wifi-monitor\smart-home-wifi-monitor\scripts\train_home.py", line 144
+    db.set_model_status(args.home_id, "READY")
+    ^^
+SyntaxError: expected 'except' or 'finally' block

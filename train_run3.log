@@ -1,0 +1,56 @@
+train ['S02', 'android-session'] 308
+val ['S03'] 104
+test ['S01'] 36
+Saved preprocessor with 170 APs
+
+epoch=001 loss=1.3219 val_acc=0.9900 val_f1=0.4975
+epoch=002 loss=1.1959 val_acc=0.9900 val_f1=0.4975
+epoch=003 loss=1.0899 val_acc=0.9900 val_f1=0.4975
+epoch=004 loss=0.9825 val_acc=0.9100 val_f1=0.4764
+epoch=005 loss=0.8857 val_acc=0.8500 val_f1=0.4595
+epoch=006 loss=0.8057 val_acc=0.8400 val_f1=0.5116
+epoch=007 loss=0.7412 val_acc=0.8400 val_f1=0.5116
+epoch=008 loss=0.6910 val_acc=0.8400 val_f1=0.5116
+epoch=009 loss=0.6447 val_acc=0.8300 val_f1=0.5057
+epoch=010 loss=0.6192 val_acc=0.8300 val_f1=0.5057
+epoch=011 loss=0.5891 val_acc=0.8300 val_f1=0.5057
+epoch=012 loss=0.5633 val_acc=0.8300 val_f1=0.5057
+epoch=013 loss=0.5480 val_acc=0.8300 val_f1=0.5057
+epoch=014 loss=0.5231 val_acc=0.8300 val_f1=0.5057
+epoch=015 loss=0.5093 val_acc=0.8200 val_f1=0.5000
+epoch=016 loss=0.4969 val_acc=0.8200 val_f1=0.5000
+epoch=017 loss=0.4942 val_acc=0.8200 val_f1=0.5000
+epoch=018 loss=0.4842 val_acc=0.8200 val_f1=0.5000
+epoch=019 loss=0.4732 val_acc=0.8200 val_f1=0.5000
+epoch=020 loss=0.4633 val_acc=0.8200 val_f1=0.5000
+epoch=021 loss=0.4546 val_acc=0.8200 val_f1=0.5000
+epoch=022 loss=0.4424 val_acc=0.8200 val_f1=0.5000
+epoch=023 loss=0.4378 val_acc=0.8400 val_f1=0.5116
+epoch=024 loss=0.4315 val_acc=0.8200 val_f1=0.5000
+epoch=025 loss=0.4259 val_acc=0.8200 val_f1=0.5000
+epoch=026 loss=0.4221 val_acc=0.8200 val_f1=0.5000
+epoch=027 loss=0.4190 val_acc=0.8200 val_f1=0.5000
+epoch=028 loss=0.4123 val_acc=0.8300 val_f1=0.5057
+epoch=029 loss=0.3990 val_acc=0.8300 val_f1=0.5057
+epoch=030 loss=0.4016 val_acc=0.8300 val_f1=0.5057
+epoch=031 loss=0.4010 val_acc=0.8300 val_f1=0.5057
+epoch=032 loss=0.3908 val_acc=0.8200 val_f1=0.5000
+epoch=033 loss=0.3928 val_acc=0.8200 val_f1=0.5000
+epoch=034 loss=0.3813 val_acc=0.8400 val_f1=0.5116
+epoch=035 loss=0.3752 val_acc=0.8400 val_f1=0.5116
+Best val macro-F1=0.5116; saved E:\Downloads\smart-home-wifi-monitor1006\smart-home-wifi-monitor\smart-home-wifi-monitor\models\homes\3\roomnet_lite.pt
+
+Traceback (most recent call last):
+  File "E:\Downloads\smart-home-wifi-monitor1006\smart-home-wifi-monitor\smart-home-wifi-monitor\scripts\train_home.py", line 98, in <module>
+    main()
+  File "E:\Downloads\smart-home-wifi-monitor1006\smart-home-wifi-monitor\smart-home-wifi-monitor\scripts\train_home.py", line 86, in main
+    raise RuntimeError(f"Command failed: {' '.join(command)}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
+RuntimeError: Command failed: E:\Downloads\smart-home-wifi-monitor1006\smart-home-wifi-monitor\smart-home-wifi-monitor\.venv\Scripts\python.exe E:\Downloads\smart-home-wifi-monitor1006\smart-home-wifi-monitor\smart-home-wifi-monitor\scripts\evaluate_room.py --config E:\Downloads\smart-home-wifi-monitor1006\smart-home-wifi-monitor\smart-home-wifi-monitor\models\homes\3\config.yaml --processed-dir E:\Downloads\smart-home-wifi-monitor1006\smart-home-wifi-monitor\smart-home-wifi-monitor\data\homes\3\processed --models-dir E:\Downloads\smart-home-wifi-monitor1006\smart-home-wifi-monitor\smart-home-wifi-monitor\models\homes\3
+STDOUT:
+
+STDERR:
+  File "E:\Downloads\smart-home-wifi-monitor1006\smart-home-wifi-monitor\smart-home-wifi-monitor\scripts\evaluate_room.py", line 23
+    def main(): = Path(__file__).resolve().parents[1]
+                ^
+SyntaxError: invalid syntax
+

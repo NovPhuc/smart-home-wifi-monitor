@@ -1,0 +1,2 @@
+E:\Downloads\smart-home-wifi-monitor1006\smart-home-wifi-monitor\smart-home-wifi-monitor\.venv\Lib\site-packages\sklearn\metrics\_classification.py:614: UserWarning: A single label was found in 'y_true' and 'y_pred'. For the confusion matrix to have the correct shape, use the 'labels' parameter to pass all known labels.
+  warnings.warn(

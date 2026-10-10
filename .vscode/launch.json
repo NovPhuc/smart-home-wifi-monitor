@@ -1,0 +1,28 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Flask Server",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/server/app.py",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            },
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Open Dashboard",
+            "type": "editor-browser",
+            "request": "launch",
+            "url": "http://localhost:5000",
+            "webRoot": "${workspaceFolder}"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Run Server + Browser",
+            "configurations": ["Run Flask Server", "Open Dashboard"]
+        }
+    ]
+}
