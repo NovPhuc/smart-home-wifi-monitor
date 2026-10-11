@@ -80,6 +80,12 @@ Căn cứ đánh giá: `De_cuong_chi_tiet_CNTT-KLCN-336.docx` (bản trích xu�
 - **Cloud DB (chưa chọn provider)**: chờ bạn tạo Supabase/Neon free → dán `DATABASE_URL=postgresql://...` vào `.env` → tôi sẽ chuyển storage.py sang chế độ kép (SQLite cho 43 test, Postgres khi có DATABASE_URL) + script migrate giữ nguyên 638 scans thật.
 - Flask khởi động lại với cấu hình mới (shell `sh_129d636e1001nSBCBMd9A5oXWR`); đã xác minh LOCAL 200 + TUNNEL 200.
 
+## Public dự án (2026-10-11, tối)
+- Đã tạo nhánh **`public-release`** (orphan, root commit `bd7005b`, 218 file) — lịch sử sạch, không chứa: de_cuong_text.txt (tài liệu trường), BAO_CAO_KET_QUA.docx, train logs + runlogs (đường dẫn máy cá nhân), backup_original, android build intermediates, 2 script report cũ.
+- `.gitignore` bản public bổ sung: .env, data/*.db, data/homes/, data/backup_db/, models/homes/, .tmp/, android build — dữ liệu thật của người dùng KHÔNG có trong repo public.
+- Đã quay lại nhánh `fix/optimize-training` làm việc; file trên đĩa nguyên vẹn.
+- **Chờ chủ project**: tạo repo trống trên GitHub (gợi ý tên: smart-home-wifi-monitor-336, visibility Public) → gửi URL → push nhánh public-release lên main sau khi xác nhận. Chưa push (ràng buộc). Cân nhắc thêm LICENSE (MIT) nếu muốn cho phép tái sử dụng.
+
 ## Vị trí kết thúc phiên
 Các việc chính đã đóng (kể cả dọn DB). Còn lại: (1) bạn thu đủ protocol thật (S08 đang chạy — nhớ đủ 3 hướng cầm) → bấm TRAIN trên dashboard để có metrics chính thức trên dữ liệu thật; (2) nếu muốn DB cloud: tạo Supabase/Neon + dán DATABASE_URL vào .env; (3) nếu muốn repo public: tạo repo GitHub + gửi URL; (4) báo cáo cuối khóa + slide (tuần 11-12).
 
