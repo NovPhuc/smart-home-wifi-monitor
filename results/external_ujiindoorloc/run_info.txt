@@ -1,0 +1,19 @@
+label: external_ujiindoorloc — kiem dinh ngoai tren dataset cong khai UJIIndoorLoc
+nguon: UCI ID 310 — Torres-Sospedra, J. et al. (2014), DOI 10.24432/C5MS59, CC BY 4.0
+       https://archive.ics.uci.edu/dataset/310/ujiindoorloc
+chay: 2026-10-11 · seed 42 · Python 3.14.5 · torch CPU
+du lieu goc: trainingData.csv 19937 hang x 529 cot (520 WAP, gia tri 100 = khong phat hien -> da chuyen -100 theo quy uoc project)
+convert (scripts/convert_external_dataset.py):
+- chon toa co nhieu fingerprint nhat: BUILDINGID=2, FLOOR=3 (2709 hang, giu 2694 sau loc vung)
+- chia 6 vung bang luoi 2 (longitude median) x 3 (latitude tercile) -> Zone1..Zone6 (~450 mau/vung)
+- 6 session (S01-S06), moi session = block theo TIMESTAMP cua tung vung; train S01-S04 / val S05 / test S06
+- config: config_external_ujiindoorloc.yaml; pipeline giong UCI WIL
+ket qua (test session S06, ~447 cua so):
+- RoomNetLite: acc=0.8112, macro_f1=0.7751, latency=0.0621 ms/mau
+- SimpleCNN:   acc=0.8719, macro_f1=0.8432  (SimpleCNN CAO HON RoomNetLite +6.1pp)
+- kNN=0.7663, RandomForest=0.9236, MLP=0.8562
+nhan xet trung thuc:
+- 520 AP (1560 chieu feature) va nhan "vung" la luoi khong gian (khong phai phong vat ly) — kho hon nhieu so 7 AP cua WIL va 12 AP synthetic
+- RoomNetLite (thiet ke cho fingerprint it AP, it mau) thua SimpleCNN/RF tai day: cho thay baseline don gian dung hon khi dim rat cao + mau it — diem tu van dang chu y cho buoc toi optimize (vd. loc WAP it xuat hien, tang hidden_channels, hoac train them du lieu cac toa khac)
+- RF 92.36% la tot nhat — phu hop dac tinh du lieu bang (tabular)
+gioi han: khong chay kiem dinh temporal tren validationData.csv — sau khi loc toa 2/floor 3 khong du 60 mau / 4 vung (ghi trong meta.json "temporal_test.skipped_reason")

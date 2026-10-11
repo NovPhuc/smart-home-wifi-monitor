@@ -1,0 +1,40 @@
+{
+  "source": {
+    "name": "UCI Wireless Indoor Localization (UCI ID 422)",
+    "citation": "Bhatt, R. (2017). Wireless Indoor Localization [Dataset]. UCI Machine Learning Repository. DOI 10.24432/C51880.",
+    "license": "CC BY 4.0",
+    "url": "https://archive.ics.uci.edu/dataset/422/wireless+indoor+localization",
+    "download": "https://archive.ics.uci.edu/static/public/422/wireless+indoor+localization.zip"
+  },
+  "original_format": "wifi_localization.txt — 2000 hang, tab-separated, 7 cot RSSI dBm + nhan phong 1-4, KHONG gia tri thieu, khong timestamp (tao timestamp gia lien tiep +2s de dap ung schema)",
+  "room_mapping": {
+    "Room1": 1,
+    "Room2": 2,
+    "Room3": 3,
+    "Room4": 4
+  },
+  "session_scheme": "5 session (S01-S05); session Sk = block thu k gom 100 mau lien tiep cua TUNG phong -> moi split deu chua du 4 phong",
+  "split_sessions": {
+    "train": 3,
+    "val": 1,
+    "test": 1
+  },
+  "rows": 2000,
+  "rooms": [
+    "Room1",
+    "Room2",
+    "Room3",
+    "Room4"
+  ],
+  "ap_columns": [
+    "AP_01",
+    "AP_02",
+    "AP_03",
+    "AP_04",
+    "AP_05",
+    "AP_06",
+    "AP_07"
+  ],
+  "output_csv": "data\\external\\uci_wil\\wifi_fingerprints.csv",
+  "config": "config_external_uci_wil.yaml"
+}

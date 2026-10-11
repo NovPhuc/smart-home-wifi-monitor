@@ -1,0 +1,31 @@
+label: after_optimized — pipeline sau tối ưu (commit 7ac19a8 + Fix A/B/C phiên 2026-10-11, chưa commit)
+phiên chạy: 2026-10-11 · Python 3.14.5 · torch CPU · Windows (PowerShell)
+seed: 42 — cố định trong config.yaml và set_seed() ở mọi script
+
+dữ liệu (synthetic v2 — đã sửa lỗi #1):
+- room: 4800 dòng, 8 session, 5 phòng × 960, 12 AP; signature +6/+4 dB, noise sigma=6.0,
+  nhiễu môi trường, missing tương quan 15% (AP xa mất nhiều hơn), burst interference 5%
+- anomaly: 760 sự kiện, 14 ngày; 560 normal + 50 mẫu/loại × 4 loại, dwell biến thiên ±20%
+
+pipeline chạy:
+1. generate_synthetic_data.py (v2)
+2. prepare_data.py — split session 6/1/1 (S01–S06/S07/S08), preprocessor fit CHỈ trên train (global_median fallback)
+3. train_room.py — RoomNetLite + augmentation (noise σ=0.015 + AP dropout) + CosineAnnealingWarmRestarts + early stopping (patience 10)
+4. evaluate_room.py — test S08, đo cả model latency + e2e (softmax + TopologyFilter)
+5. train_simple_cnn.py + evaluate_simple_cnn.py — baseline CNN đơn giản (không depthwise/center/temporal loss/augmentation)
+6. train_anomaly.py — GRU-AE + grid search quantile [0.90–0.995]; Fix A: train D01–D10 (normal) / threshold D11–D12 (normal+anomaly) / test D13–D14 (tách riêng)
+7. evaluate_anomaly.py — Fix A: CHỈ đánh giá test_days=D13,D14 (166 sequence) — loại bỏ rò rỉ
+8. train_baselines.py — kNN / RandomForest / MLP
+9. evaluate_kfold.py --folds 5 × (roomnet | simple)
+
+kết quả chính (đọc từ *.json cùng thư mục, không hiệu chỉnh):
+- ROOMNET  test acc=0.9899, macro_f1=0.9900, latency=0.0309 ms, e2e=0.0252 ms; kfold5 0.9780±0.0106, 95%CI [0.9688, 0.9873]
+- SIMPLE   test acc=0.9765, macro_f1=0.9765; kfold5 0.9749±0.0135, 95%CI [0.9630, 0.9867]
+  → RoomNetLite hơn SimpleCNN +1.34 pp trên cùng dữ liệu/cùng split (bằng chứng "sau cải tiến" của đề cương)
+- ANOMALY (test riêng D13–D14: night_activity + unusual_transition_pattern; 66 normal + 100 anomaly seq):
+  ae_only P=1.000 R=0.970 F1=0.9848; hybrid P=1.000 R=0.990 F1=0.9950; threshold=1.60893 (quantile 0.99 do grid search chọn)
+  lưu ý: 2/4 loại anomaly (long_bathroom_stay, long_corridor_stay — D11/D12) dùng để chọn ngưỡng nên không nằm trong test (giới hạn thiết kế dữ liệu: anomaly chỉ có ở 4 ngày cuối)
+- BASELINES: RandomForest 0.9916, MLP 0.9899, kNN 0.8826
+
+so với before_original: không so sánh tuyệt đối (dữ liệu v1→v2, protocol đánh giá anomaly đã sửa rò rỉ, thêm augmentation/early stopping) — xem results/README.md mục "Khác biệt protocol".
+logs đầy đủ: runlogs/a1_gen.log … a11_kfold_simple.log

@@ -1,0 +1,16 @@
+{
+  "ap_columns": [
+    "AP_01",
+    "AP_02",
+    "AP_03",
+    "AP_04",
+    "AP_05",
+    "AP_06",
+    "AP_07"
+  ],
+  "missing_rssi": -100.0,
+  "min_rssi": -100.0,
+  "max_rssi": -30.0,
+  "global_median": -61.0,
+  "global_std": 14.480327606201172
+}

@@ -1,0 +1,21 @@
+{
+  "name": "An Tâm Home - WiFi Care",
+  "short_name": "An Tâm",
+  "description": "Giám sát vị trí theo phòng và bất thường di chuyển trong nhà thông minh.",
+  "lang": "vi",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#08111f",
+  "theme_color": "#08111f",
+  "categories": ["health", "lifestyle", "utilities"],
+  "icons": [
+    {
+      "src": "/static/icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

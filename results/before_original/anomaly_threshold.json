@@ -1,0 +1,7 @@
+{
+  "threshold": 1.6544039225578309,
+  "quantile": 0.99,
+  "normal_val_mean": 1.2987962262799042,
+  "normal_val_std": 0.11934389084858375,
+  "sequence_length": 8
+}

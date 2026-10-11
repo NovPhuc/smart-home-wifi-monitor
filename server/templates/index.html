@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#08111f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="An Tâm">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/app-icon.svg">
+  <title>An Tâm Home — Giám sát chuyển động trong nhà</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">Bỏ qua điều hướng</a>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="An Tâm Home"><span class="brand-mark">AT</span><span><strong>An Tâm</strong><small>WiFi Care</small></span></a>
+      <nav aria-label="Điều hướng chính"><a class="active" href="#overview">Tổng quan</a><a href="#floorplan">Sơ đồ nhà</a><a href="#timeline">Hoạt động</a><a href="#metrics">Thực nghiệm</a><a href="#alerts">Cảnh báo</a></nav>
+      <div class="privacy-note"><span>Không camera</span><p>Định vị mức phòng từ cường độ tín hiệu Wi‑Fi, ưu tiên quyền riêng tư.</p></div>
+    </aside>
+    <main id="mainContent">
+      <header class="topbar">
+        <div><p class="eyebrow">TRUNG TÂM GIÁM SÁT</p><h1>Chào buổi sáng, gia đình</h1><p class="subtitle">Theo dõi an toàn và nhịp sinh hoạt trong nhà theo thời gian thực.</p></div>
+        <div class="top-actions"><button id="installButton" class="secondary-btn" hidden>Cài trên iPhone</button><div class="live-pill" role="status" aria-live="polite"><i id="statusDot"></i><span id="statusText">Đang kết nối</span></div></div>
+      </header>
+      <section id="overview" class="overview-grid">
+        <article class="card location-card">
+          <div class="card-head"><span>VỊ TRÍ HIỆN TẠI</span><b id="confidence">—</b></div>
+          <div class="location-main"><div class="person-pin">●</div><div><h2 id="room">Chưa có dữ liệu</h2><p id="roomMeta">Đang chờ fingerprint Wi‑Fi…</p></div></div>
+          <div class="activity-row"><span id="activityIcon" class="activity-icon">≈</span><div><strong id="activityState">Đang hiệu chuẩn</strong><small id="activityMeta">Cần vài mẫu tín hiệu đầu tiên</small></div></div>
+        </article>
+        <article id="safetyCard" class="card safety-card">
+          <div class="card-head"><span>TRẠNG THÁI AN TOÀN</span><span id="systemBadge" class="badge neutral">CHƯA CÓ DỮ LIỆU</span></div>
+          <div class="safety-orb"><span id="safetyIcon">OK</span></div><h3 id="safetyTitle">Hệ thống sẵn sàng</h3><p id="safetyDescription">Không có cảnh báo cần xử lý.</p>
+        </article>
+        <article class="card stats-card">
+          <div class="stat"><span>Trong phòng hiện tại</span><strong id="dwell">—</strong></div><div class="stat"><span>Chuyển phòng / giờ</span><strong id="transitions">—</strong></div><div class="stat"><span>Điểm bất thường</span><strong id="score">—</strong></div>
+          <div class="meter"><div id="meterFill"></div></div><div class="signal"><span id="signalDot"></span><span id="signalText">Chưa có tín hiệu</span><small id="lastUpdate">—</small></div>
+        </article>
+      </section>
+      <section class="content-grid">
+        <article id="floorplan" class="card floor-card">
+          <div class="section-title"><div><p class="eyebrow">ĐỊNH VỊ THEO PHÒNG</p><h2>Sơ đồ nhà</h2></div><span class="model-state">RoomNet‑Lite</span></div>
+          <div class="floorplan" aria-label="Sơ đồ vị trí trong nhà">
+            <button class="room-tile bedroom" data-room="Bedroom"><span>Phòng ngủ</span><small>Bedroom</small></button><button class="room-tile corridor" data-room="Corridor"><span>Hành lang</span><small>Corridor</small></button><button class="room-tile bathroom" data-room="Bathroom"><span>Phòng tắm</span><small>Bathroom</small></button><button class="room-tile living" data-room="LivingRoom"><span>Phòng khách</span><small>LivingRoom</small></button><button class="room-tile kitchen" data-room="Kitchen"><span>Nhà bếp</span><small>Kitchen</small></button>
+          </div><div class="probabilities" id="probabilities"></div>
+        </article>
+        <div class="side-column">
+          <article id="iphoneSensor" class="card sensor-card"><div class="section-title"><div><p class="eyebrow">IPHONE SENSOR BRIDGE</p><h2>Cảm biến chuyển động</h2></div><span id="sensorBadge" class="badge neutral">TẮT</span></div><p id="sensorDescription">Cho phép iPhone gửi gia tốc kế để bổ sung tín hiệu vận động. Không dùng để xác nhận té ngã.</p><button id="sensorToggle" class="primary-btn" aria-pressed="false">Bật cảm biến iPhone</button><small id="sensorMeta" aria-live="polite">Cần Safari qua HTTPS và sự đồng ý của người dùng.</small></article>
+          <article class="card demo-card"><div class="section-title"><div><p class="eyebrow">TRẢI NGHIỆM NHANH</p><h2>Chế độ mô phỏng</h2></div></div><p>Phát lại dữ liệu fingerprint mẫu để kiểm tra toàn bộ pipeline.</p><div class="demo-actions"><button id="demoToggle" class="primary-btn">Chạy demo</button><button id="resetBtn" class="icon-btn" title="Đặt lại dữ liệu" aria-label="Đặt lại phiên giám sát"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button></div><small id="demoStatus">Demo sẽ tự di chuyển qua các phòng liền kề.</small></article>
+          <article id="alerts" class="card alerts-card"><div class="section-title"><div><p class="eyebrow">ƯU TIÊN XỬ LÝ</p><h2>Cảnh báo gần đây</h2></div><span id="alertCount" class="count">0</span></div><div id="alertsList" class="alerts-list"><div class="empty-state">Chưa có cảnh báo.</div></div></article>
+        </div>
+      </section>
+      <section id="timeline" class="card timeline-card"><div class="section-title"><div><p class="eyebrow">NHỊP SINH HOẠT</p><h2>Dòng thời gian di chuyển</h2></div><span id="historyCount">0 sự kiện</span></div><div id="history" class="timeline"><div class="empty-state">Dữ liệu hoạt động sẽ xuất hiện tại đây.</div></div></section>
+      <section id="metrics" class="card metrics-card"><div class="section-title"><div><p class="eyebrow">TIÊU CHÍ ĐỀ CƯƠNG</p><h2>Kết quả thực nghiệm</h2></div><span class="model-state">Synthetic demo</span></div><div class="metric-grid"><div><span>Accuracy định vị</span><strong id="metricAccuracy">—</strong></div><div><span>Macro F1 định vị</span><strong id="metricF1">—</strong></div><div><span>Recall bất thường</span><strong id="metricRecall">—</strong></div><div><span>Độ trễ / mẫu</span><strong id="metricLatency">—</strong></div></div><div id="baselineComparison" class="baseline-list"></div><p class="data-notice">Các số liệu kèm model hiện tại dùng dữ liệu tổng hợp để kiểm tra pipeline. Báo cáo chính thức phải thay bằng dữ liệu RSSI thu tại nhà/lab thực tế.</p></section>
+      <footer>WiFi Fingerprinting • Không sử dụng camera • Đây không phải thiết bị y tế hoặc hệ thống xác nhận té ngã.</footer>
+      <nav class="bottom-nav" aria-label="Điều hướng trên điện thoại"><a href="#overview">Tổng quan</a><a href="#floorplan">Sơ đồ</a><a href="#alerts">Cảnh báo</a><a href="#metrics">Kết quả</a></nav>
+    </main>
+  </div>
+  <dialog id="installGuide"><form method="dialog"><button class="dialog-close" aria-label="Đóng hướng dẫn">Đóng</button><p class="eyebrow">CÀI TRÊN IPHONE</p><h2>Thêm An Tâm vào Màn hình chính</h2><ol><li>Mở địa chỉ HTTPS này bằng Safari.</li><li>Nhấn nút Chia sẻ trong thanh công cụ Safari.</li><li>Chọn “Thêm vào MH chính”, sau đó nhấn “Thêm”.</li></ol><p>iOS không cho ứng dụng thường quét danh sách Wi‑Fi/RSSI xung quanh. Định vị phòng vẫn nhận fingerprint từ Android, ESP32 hoặc access point; iPhone dùng để xem dashboard và gửi cảm biến chuyển động khi ứng dụng đang mở.</p></form></dialog>
+  <script src="/static/app-v2.js"></script>
+</body>
+</html>

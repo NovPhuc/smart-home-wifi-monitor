@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#0A0E1A"
+    android:fillViewport="true"
+    android:scrollbars="none">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp"
+        android:paddingTop="16dp" android:paddingBottom="28dp">
+
+        <!-- ═══ Header ═══ -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical">
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Smart Home Monitor" android:textColor="@color/text_primary"
+                    android:textSize="22sp" android:textStyle="bold" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Wi-Fi Indoor Positioning" android:textColor="@color/text_secondary"
+                    android:textSize="13sp" android:paddingTop="2dp" />
+            </LinearLayout>
+            <TextView android:id="@+id/apsBadge" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:background="@drawable/bg_chip" android:paddingStart="14dp" android:paddingEnd="14dp"
+                android:paddingTop="6dp" android:paddingBottom="6dp"
+                android:text="0 APs" android:textColor="@color/primary" android:textSize="13sp" android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- ═══ Hero: kết quả định vị ═══ -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:background="@drawable/bg_hero"
+            android:padding="22dp" android:layout_marginTop="18dp">
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="CURRENT LOCATION" android:textColor="@color/text_muted"
+                android:textSize="11sp" android:letterSpacing="0.15" />
+
+            <TextView android:id="@+id/roomHero" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="— — —" android:textColor="@color/text_primary"
+                android:textSize="34sp" android:textStyle="bold" android:paddingTop="6dp" />
+
+            <TextView android:id="@+id/statusChip" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:background="@drawable/bg_chip" android:paddingStart="14dp" android:paddingEnd="14dp"
+                android:paddingTop="5dp" android:paddingBottom="5dp" android:layout_marginTop="10dp"
+                android:text="READY" android:textColor="@color/primary" android:textSize="12sp" android:textStyle="bold" />
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:paddingTop="18dp" android:gravity="center_vertical">
+                <ProgressBar android:id="@+id/confBar" style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp" android:layout_height="10dp" android:layout_weight="1"
+                    android:progressDrawable="@drawable/conf_progress" android:max="100" android:progress="0" />
+                <TextView android:id="@+id/confText" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="—" android:textColor="@color/text_primary" android:textSize="15sp"
+                    android:textStyle="bold" android:paddingStart="12dp" />
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:paddingTop="14dp">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:orientation="vertical">
+                    <TextView android:id="@+id/statActivity" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="—" android:textColor="@color/text_primary" android:textSize="15sp" android:textStyle="bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Activity" android:textColor="@color/text_muted" android:textSize="11sp" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:orientation="vertical">
+                    <TextView android:id="@+id/statSignal" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="—" android:textColor="@color/text_primary" android:textSize="15sp" android:textStyle="bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Signal" android:textColor="@color/text_muted" android:textSize="11sp" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:orientation="vertical">
+                    <TextView android:id="@+id/statDwell" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="—" android:textColor="@color/text_primary" android:textSize="15sp" android:textStyle="bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Dwell" android:textColor="@color/text_muted" android:textSize="11sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ═══ Card: kết nối backend ═══ -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:background="@drawable/bg_card"
+            android:padding="18dp" android:layout_marginTop="16dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="BACKEND" android:textColor="@color/text_muted" android:textSize="11sp"
+                android:letterSpacing="0.15" />
+            <EditText android:id="@+id/backendUrl" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:background="@drawable/bg_input" android:paddingStart="14dp" android:paddingEnd="14dp"
+                android:paddingTop="12dp" android:paddingBottom="12dp" android:layout_marginTop="10dp"
+                android:hint="http://192.168.1.10:5000" android:textColorHint="@color/text_muted"
+                android:textColor="@color/text_primary" android:textSize="14sp" android:inputType="textUri"
+                android:maxLines="1"
+                android:autofillHints="url" />
+            <EditText android:id="@+id/collectorToken" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:background="@drawable/bg_input" android:paddingStart="14dp" android:paddingEnd="14dp"
+                android:paddingTop="12dp" android:paddingBottom="12dp" android:layout_marginTop="10dp"
+                android:hint="Mã ghép nối (ath_...)" android:textColorHint="@color/text_muted"
+                android:textColor="@color/text_primary" android:textSize="14sp"
+                android:inputType="textPassword" android:maxLines="1"
+                android:importantForAutofill="no" />
+            <EditText android:id="@+id/sessionId" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:background="@drawable/bg_input" android:paddingStart="14dp" android:paddingEnd="14dp"
+                android:paddingTop="12dp" android:paddingBottom="12dp" android:layout_marginTop="10dp"
+                android:hint="Session ID (S01)" android:textColorHint="@color/text_muted"
+                android:textColor="@color/text_primary" android:textSize="14sp" android:maxLines="1" />
+        </LinearLayout>
+
+        <!-- ═══ Card: thu thập dữ liệu ═══ -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:background="@drawable/bg_card"
+            android:padding="18dp" android:layout_marginTop="14dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="COLLECT DATA" android:textColor="@color/text_muted" android:textSize="11sp"
+                android:letterSpacing="0.15" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="10dp" android:paddingTop="10dp"
+                android:text="Nhập tên phòng (hỗ trợ viết hoa/thường + dấu)" android:textColor="@color/text_muted" android:textSize="12sp" />
+            <EditText android:id="@+id/roomName" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:background="@drawable/bg_input" android:paddingStart="14dp" android:paddingEnd="14dp"
+                android:paddingTop="12dp" android:paddingBottom="12dp" android:layout_marginTop="6dp"
+                android:hint="Phòng Ngủ, Phòng Khách, Nhà Bếp…" android:textColorHint="@color/text_muted"
+                android:textColor="@color/text_primary" android:textSize="14sp" android:maxLines="1"
+                android:autofillHints="room-name" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="10dp" android:paddingTop="10dp"
+                android:text="Lưu ý: server chuẩn hóa tên phòng tự động — nhập bất kỳ kiểu nào vẫn tìm đúng." android:textColor="@color/text_muted" android:textSize="12sp" />
+            <TextView android:id="@+id/orientationText" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="12dp" android:paddingTop="10dp"
+                android:text="Hướng cầm: UNKNOWN" android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+            <Button android:id="@+id/collectButton" android:layout_width="match_parent" android:layout_height="52dp"
+                android:background="@drawable/btn_primary" android:layout_marginTop="12dp"
+                android:text="COLLECT ONE SCAN" android:textColor="#06121F"
+                android:textSize="14sp" android:textStyle="bold" android:stateListAnimator="@null" />
+            <Button android:id="@+id/autoCollectButton" android:layout_width="match_parent" android:layout_height="52dp"
+                android:background="@drawable/btn_primary" android:layout_marginTop="10dp"
+                android:text="THU TỰ ĐỘNG" android:textColor="#06121F"
+                android:textSize="14sp" android:textStyle="bold" android:stateListAnimator="@null" />
+        </LinearLayout>
+
+        <!-- ═══ Action buttons ═══ -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:layout_marginTop="14dp">
+            <Button android:id="@+id/inferButton" android:layout_width="0dp" android:layout_height="52dp"
+                android:layout_weight="1" android:background="@drawable/btn_secondary"
+                android:text="INFER" android:textColor="@color/text_primary"
+                android:textSize="14sp" android:textStyle="bold" android:stateListAnimator="@null"
+                android:layout_marginEnd="6dp" />
+            <Button android:id="@+id/autoButton" android:layout_width="0dp" android:layout_height="52dp"
+                android:layout_weight="1" android:background="@drawable/btn_secondary"
+                android:text="AUTO" android:textColor="@color/text_primary"
+                android:textSize="14sp" android:textStyle="bold" android:stateListAnimator="@null"
+                android:layout_marginStart="6dp" />
+        </LinearLayout>
+
+        <!-- ═══ Log ═══ -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:background="@drawable/bg_card"
+            android:padding="18dp" android:layout_marginTop="16dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="LOG" android:textColor="@color/text_muted" android:textSize="11sp"
+                android:letterSpacing="0.15" />
+            <TextView android:id="@+id/statusText" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Ready" android:textColor="@color/text_secondary" android:textSize="13sp"
+                android:textIsSelectable="true" android:paddingTop="10dp" android:fontFamily="monospace" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

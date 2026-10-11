@@ -1,0 +1,94 @@
+seed: 42
+time:
+  timezone_offset_hours: 7
+rooms:
+- Room1
+- Room2
+- Room3
+- Room4
+room_topology:
+  Room1:
+  - Room1
+  - Room2
+  Room2:
+  - Room1
+  - Room2
+  - Room3
+  Room3:
+  - Room2
+  - Room3
+  - Room4
+  Room4:
+  - Room3
+  - Room4
+data:
+  missing_rssi: -100.0
+  min_rssi: -100.0
+  max_rssi: -30.0
+  window_size: 5
+  anomaly_sequence_length: 8
+  anomaly_feature_max_dwell_minutes: 180
+  room_train_sessions: 3
+  room_val_sessions: 1
+  room_test_sessions: 1
+room_model:
+  hidden_channels: 32
+  embedding_dim: 64
+  dropout: 0.15
+  epochs: 35
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  center_loss_weight: 0.02
+  temporal_loss_weight: 0.05
+  early_stopping_patience: 10
+  early_stopping_min_delta: 0.0001
+anomaly_model:
+  hidden_size: 48
+  latent_size: 24
+  num_layers: 1
+  epochs: 35
+  batch_size: 64
+  lr: 0.001
+  room_loss_weight: 1.0
+  continuous_loss_weight: 0.7
+  threshold_quantile: 0.99
+  early_stopping_patience: 15
+  early_stopping_min_delta: 0.0001
+rules:
+  default_max_dwell_minutes: 45
+  room_max_dwell_minutes:
+    Bedroom: 720
+    Corridor: 8
+    Bathroom: 30
+    LivingRoom: 180
+    Kitchen: 90
+  nighttime_start_hour: 22
+  nighttime_end_hour: 6
+  suspicious_night_transitions: 4
+  nighttime_sensitive_rooms:
+  - Kitchen
+  - LivingRoom
+  nighttime_max_dwell_minutes: 20
+topology:
+  self_weight: 0.75
+activity:
+  movement_rssi_delta: 4.0
+  still_rssi_delta: 1.5
+  ema_alpha: 0.45
+  inactivity_warning_minutes: 45
+mobile_sensor:
+  movement_threshold: 0.8
+  still_threshold: 0.25
+  impact_threshold: 18.0
+  impact_followup_seconds: 20
+  still_after_impact_seconds: 5
+alerts:
+  repeat_cooldown_seconds: 600
+calibration:
+  target_samples_per_room: 100
+  required_orientations: 3
+  required_sessions: 3
+server:
+  host: 0.0.0.0
+  port: 5000

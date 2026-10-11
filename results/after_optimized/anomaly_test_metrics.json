@@ -1,0 +1,15 @@
+{
+  "ae_only": {
+    "precision": 1.0,
+    "recall": 0.97,
+    "f1": 0.9847715736040609
+  },
+  "hybrid_ae_plus_rules": {
+    "precision": 1.0,
+    "recall": 0.99,
+    "f1": 0.9949748743718593
+  },
+  "threshold": 1.6089313566684722,
+  "samples": 166,
+  "mean_score": 1.7597928090267871
+}

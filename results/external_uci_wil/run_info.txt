@@ -1,0 +1,16 @@
+label: external_uci_wil — kiem dinh ngoai tren dataset cong khai UCI Wireless Indoor Localization
+nguon: UCI ID 422 — Bhatt, R. (2017), DOI 10.24432/C51880, CC BY 4.0
+       https://archive.ics.uci.edu/dataset/422/wireless+indoor+localization
+chay: 2026-10-11 · seed 42 · Python 3.14.5 · torch CPU
+du lieu goc: wifi_localization.txt — 2000 hang, tab-separated, 7 RSSI dBm + nhan phong 1-4, khong missing, khong timestamp
+convert (scripts/convert_external_dataset.py):
+- 4 phong Room1..Room4 x 500 mau; 5 session (S01-S05), moi session = block 100 mau lien tiep cua TUNG phong
+- train S01-S03 / val S04 / test S05 (moi split deu du 4 phong); timestamp gia +2s
+- config: config_external_uci_wil.yaml; pipeline: prepare -> train_room -> evaluate_room -> train_simple_cnn -> evaluate_simple_cnn -> train_baselines
+ket qua (test session S05, 396 cua so — doc tu *.json):
+- RoomNetLite: acc=0.9899, macro_f1=0.9900, latency=0.0930 ms/mau
+- SimpleCNN:   acc=0.9823, macro_f1=0.9824
+- kNN=0.9924, RandomForest=0.9924, MLP=0.9924
+so sanh van lieu: cac cong bo thuong dat ~96-99% tren dataset nay (kNN/RF) — RoomNetLite 98.99% nam ngang dau
+y nghia: bang chung mo hinh hoat dong tot tren RSSI THAT cua ben thu ba (khong phai synthetic), kich thuoc 7 AP gan voi kich thuoc thuc te nha 2-3 phong
+logs: ../runlogs dang luu trong models/external_uci_wil khong luu — logs pipeline nam tai runlogs/e*_wil_*.log (goc project)

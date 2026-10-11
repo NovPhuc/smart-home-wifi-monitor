@@ -1,0 +1,35 @@
+# === Python ===
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# === Secrets & du lieu nguoi dung (KHONG public) ===
+.env
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/homes/
+data/backup_db/
+models/homes/
+data/raw/android_scans.jsonl
+
+# === Tai lieu noi bo / ca nhan (KHONG public) ===
+de_cuong_text.txt
+BAO_CAO_KET_QUA.docx
+backup_original/
+train_*.log
+runlogs/
+results/*/runlogs/
+
+# === IDE / OS / tool ===
+.vscode/
+.trace-mcp/
+.DS_Store
+.tmp/
+
+# === Android build ===
+android_collector/app/build/
+android_collector/.gradle/
+android_collector/local.properties
