@@ -33,7 +33,14 @@ def main():
     model.load_state_dict(torch.load(Path(args.models_dir) / "gru_autoencoder.pt", map_location=device))
     model.eval()
     with (Path(args.models_dir) / "anomaly_threshold.json").open() as f:
-        threshold = float(json.load(f)["threshold"])
+        threshold_info = json.load(f)
+    threshold = float(threshold_info["threshold"])
+    # Fix A (lỗi rò rỉ #8): chỉ đánh giá trên các ngày test đã được tách riêng
+    # khi huấn luyện (train_anomaly.py ghi "test_days" vào threshold JSON).
+    # JSON cũ không có khóa này -> giữ hành vi cũ (đánh giá mọi ngày).
+    test_days = threshold_info.get("test_days")
+    if test_days:
+        df = df[df["day_id"].isin(set(test_days))].copy()
 
     y_true, ae_pred, hybrid_pred, scores = [], [], [], []
     with torch.no_grad():

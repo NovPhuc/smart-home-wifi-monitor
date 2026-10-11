@@ -83,6 +83,6 @@
       "support": 596.0
     }
   },
-  "mean_inference_ms_per_sample": 0.026999166673628377,
-  "mean_e2e_latency_ms_per_sample": 0.01888094493064533
+  "mean_inference_ms_per_sample": 0.03157687500310842,
+  "mean_e2e_latency_ms_per_sample": 0.024505535714273004
 }

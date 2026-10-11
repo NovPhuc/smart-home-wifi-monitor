@@ -38,6 +38,8 @@ room_model:
   weight_decay: 0.0001
   center_loss_weight: 0.02
   temporal_loss_weight: 0.05
+  early_stopping_patience: 10
+  early_stopping_min_delta: 0.0001
 
 anomaly_model:
   hidden_size: 48
@@ -48,7 +50,9 @@ anomaly_model:
   lr: 0.001
   room_loss_weight: 1.0
   continuous_loss_weight: 0.7
-  threshold_quantile: 0.99
+  threshold_quantile: 0.99  # đã được grid search [0.90–0.995] trong train_anomaly.py thay thế; giữ để tham chiếu
+  early_stopping_patience: 15
+  early_stopping_min_delta: 0.0001
 
 rules:
   default_max_dwell_minutes: 45
@@ -63,6 +67,9 @@ rules:
   suspicious_night_transitions: 4
   nighttime_sensitive_rooms: [Kitchen, LivingRoom]
   nighttime_max_dwell_minutes: 20
+
+topology:
+  self_weight: 0.75
 
 activity:
   movement_rssi_delta: 4.0

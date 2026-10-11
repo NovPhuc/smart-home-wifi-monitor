@@ -83,10 +83,18 @@ def main():
     anomaly = df[df["is_anomaly"] == 1].copy()
     days = list(dict.fromkeys(normal["day_id"].tolist()))
     anomaly_days = list(dict.fromkeys(anomaly["day_id"].tolist()))
-    split = max(1, int(len(days) * 0.8))
-    train_days = set(days[:split])
-    val_days = set(days[split:]) or {days[-1]}
-    val_anomaly_days = set(anomaly_days[max(1, int(len(anomaly_days) * 0.5)):]) or set()
+    # Fix A (lỗi rò rỉ #8): tách 3 phần KHÔNG giao nhau theo ngày —
+    #   train:     ~70% ngày đầu  -> huấn luyện AE (chỉ sự kiện normal)
+    #   threshold: 2 ngày kế tiếp -> early stopping + chọn ngưỡng (normal + anomaly)
+    #   test:      các ngày cuối  -> CHỈ dùng để đánh giá trong evaluate_anomaly.py
+    # Trước đây các ngày dùng chọn ngưỡng (D13–D14) nằm trong tập đánh giá.
+    n_days = len(days)
+    n_train = max(1, int(n_days * 0.7) + 1)
+    n_threshold = 2
+    train_days = set(days[:n_train])
+    val_days = set(days[n_train:n_train + n_threshold]) or {days[-1]}
+    test_days = [d for d in days[n_train + n_threshold:]]
+    val_anomaly_days = set(anomaly_days[:n_threshold]) or set()
 
     builder = AnomalyFeatureBuilder(cfg["rooms"], float(cfg["data"].get("anomaly_feature_max_dwell_minutes", 180)))
     seq_len = int(cfg["data"]["anomaly_sequence_length"])
@@ -165,6 +173,9 @@ def main():
         "normal_val_std": float(val_scores_normal.std()),
         "sequence_length": seq_len,
         "threshold_grid_search": threshold_results,
+        "train_days": sorted(train_days),
+        "threshold_days": sorted(val_days),
+        "test_days": sorted(test_days),
     }, Path(args.models_dir) / "anomaly_threshold.json")
     print(f"Saved anomaly model and threshold={threshold:.5f} (quantile={best_q})")
 

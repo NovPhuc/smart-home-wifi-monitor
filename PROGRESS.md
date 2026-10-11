@@ -1,78 +1,69 @@
 # PROGRESS — Khóa luận 336 (CNTT-KLCN-336)
 
-Phiên làm việc: 2026-10-11 (phiên 3)
-Nhánh git: `fix/optimize-training` · Commit gốc (trước tối ưu): `7b2f120`
-Sao lưu dữ liệu gốc: `backup_original/` (wifi_fingerprints.csv, location_events.csv, config.yaml)
+Phiên làm việc: 2026-10-11 (phiên 3) — **HOÀN THÀNH CẢ 5 GIAI ĐOẠN**
+Nhánh git: `fix/optimize-training` · Commit gốc (trước tối ưu): `7b2f120` · Checkpoint fix phiên 1-2: `7ac19a8`
+Sao lưu dữ liệu gốc: `backup_original/` + commit gốc (không bao giờ bị ghi đè — baseline chạy trong bản sao git archive `.tmp/baseline-wt`)
 Căn cứ đánh giá: `De_cuong_chi_tiet_CNTT-KLCN-336.docx` (bản trích xuất: `de_cuong_text.txt`)
 
-## VỊ TRÍ HIỆN TẠI (để tiếp tục nếu bị ngắt)
-Đang ở: **Giai đoạn 3 — Đo baseline gốc** (chạy pipeline tại commit `7b2f120` trong git worktree `.tmp/baseline-wt`, kết quả lưu vào `results/before_original/`).
+## KẾT QUẢ TỔNG (chạy thật 2026-10-11, seed 42, tái lập được — mọi số liệu từ `results/`)
+
+| Chỉ số | Trước (gốc, `results/before_original/`) | Sau (tối ưu, `results/after_optimized/`) |
+|---|---|---|
+| RoomNetLite test Accuracy | 100.00% (dữ liệu v1 quá dễ — lỗi #2) | **98.99%** |
+| RoomNetLite test Macro F1 | 100.00% | **99.00%** |
+| SimpleCNN baseline test Accuracy | — (chưa có) | 97.65% → **cải tiến +1.34pp** |
+| K-fold 5 RoomNetLite | — | 97.80% ± 1.06% [96.88, 98.73] |
+| K-fold 5 SimpleCNN | — | 97.49% ± 1.35% [96.30, 98.67] |
+| Anomaly Hybrid F1 (protocol cũ: mọi ngày, có rò rỉ / sau: test riêng D13-D14) | 91.53% (490 seq) | **99.50%** (166 seq, P=100%, R=99%) |
+| Anomaly AE-only F1 | 43.90% | **98.48%** |
+| Độ trễ model / e2e | 0.0270 ms / — | 0.0309 ms / 0.0252 ms |
+| RandomForest / MLP / kNN | 99.83 / 99.33 / 98.32% | 99.16 / 98.99 / 88.26% |
+| Unit test | 43/43 | **43/43** · DB integrity ok, 0 FK violation |
 
 ## Giai đoạn 1 — Danh sách việc ✅
-- [x] Đọc AGENTS.md, đề cương (trích xuất .docx → de_cuong_text.txt)
-- [x] Lập PROGRESS.md (file này)
-- [ ] Commit checkpoint trạng thái hiện tại (bảo vệ các sửa lỗi từ phiên 1-2)
-- [ ] Giai đoạn 3: Đo baseline gốc → `results/before_original/`
-- [ ] Giai đoạn 4: Sửa 3 lỗi còn lại (A: rò rỉ đánh giá anomaly, B: config keys, C: results/ có cấu trúc)
-- [ ] Giai đoạn 4: Đo "sau" → `results/after_optimized/` (seed 42 cố định)
-- [ ] K-fold 5-fold cho RoomNetLite + SimpleCNN
-- [ ] Chạy 43 unit test + PRAGMA integrity_check DB
-- [ ] Giai đoạn 5: Viết BAO_CAO_KET_QUA.docx (Times New Roman 13)
-- [ ] Cập nhật PROGRESS.md lần cuối + commit
+Đọc AGENTS.md + đề cương; lập PROGRESS.md; commit checkpoint `7ac19a8` (bảo vệ fix phiên 1-2).
 
-## Giai đoạn 2 — Phân tích ✅ (đã trình bày và được duyệt ở phiên 1-2)
+## Giai đoạn 2 — Phân tích ✅ (phiên 1-2, đã được duyệt)
+- Cấu trúc: src/smarthome (models, preprocessing, dataset, anomaly+MobileSensorFusion, inference, topology, activity, mobile_sensor, storage SQLite, metrics, alerts) · scripts pipeline · server Flask · android_collector · tests 43.
+- Thuật toán: RoomNetLite (CE + CenterLoss 0.02 + JS temporal 0.05), GRU-AE (CE room + 0.7·Huber), TopologyFilter, RuleEngine; preprocessor fit chỉ trên train ✓; split session 6/1/1 ✓.
+- 15 lỗi phát hiện — bảng đầy đủ ở mục "Bảng lỗi" bên dưới; đều kèm file:dòng.
 
-### Cấu trúc project
-- `src/smarthome/` — thư viện lõi: models/ (RoomNetLite 1D-CNN, SimpleCNN baseline, GRU Autoencoder), preprocessing.py, dataset.py, anomaly.py (RuleEngine, OnlineAnomalyDetector, MobileSensorFusion), inference.py, topology.py (TopologyFilter), activity.py, mobile_sensor.py, storage.py (SQLite), metrics.py, alerts.py
-- `scripts/` — pipeline: generate_synthetic_data → prepare_data → train_room/evaluate_room → train_simple_cnn/evaluate_simple_cnn → train_anomaly/evaluate_anomaly → train_baselines → evaluate_kfold
-- `data/` — raw (4800 mẫu WiFi, 8 session, 5 phòng, 12 AP), processed (split 6/1/1 session), anomaly (location_events.csv), smarthome.db (SQLite)
-- `server/app.py` — Flask dashboard + REST API; `android_collector/` — app thu thập
-- `tests/` — 43 unit test
+## Giai đoạn 3 — Đo baseline gốc ✅ (2026-10-11)
+- `git archive 7b2f120` (trừ android_collector/ do đường dẫn >260 ký tự) → `.tmp/baseline-wt`; chạy đủ 7 bước pipeline gốc, seed 42 → `results/before_original/` (5 JSON + runlogs + run_info.txt).
+- Phát hiện подтвер nhận: dữ liệu v1 cho Accuracy 100% (giả tạo), anomaly protocol cũ có rò rỉ.
 
-### Thuật toán huấn luyện (đã kiểm tra)
-- **RoomNetLite**: stem → depthwise → pointwise → pool → embedding → classifier. Loss = CE + 0.02·CenterLoss + 0.05·JS(self-consistency). AdamW lr=1e-3, wd=1e-4, CosineAnnealingWarmRestarts, early stopping patience=10.
-- **GRU-AE**: encoder GRU(48) → latent tanh(24) → decoder GRU → out. Loss = CE (room one-hot) + 0.7·Huber (continuous). Ngưỡng = quantile reconstruction error trên validation, grid search [0.90–0.995].
-- **Tiền xử lý**: RSSI → (absolute [0,1], relative [-1,1] so với median visible, mask) × 12 AP = 36 chiều; missing = −100; fallback global_median khi < 3 AP hiển thị. Preprocessor fit **chỉ trên train** (không rò rỉ).
-- **Chia dữ liệu**: theo session (S01–S06 train / S07 val / S08 test) — không giao nhau ✓. Anomaly: theo ngày.
-- **Mất cân bằng lớp**: dữ liệu phòng cân bằng (960/phòng); dữ liệu anomaly gốc mất cân bằng nghiêm trọng (7 mẫu/loại vs 560 normal) → đã sửa.
-- **Chỉ số**: Accuracy, macro-F1, confusion matrix (phòng); Precision/Recall/F1 (anomaly, ae_only + hybrid); mean_inference_ms + e2e latency.
+## Giai đoạn 4 — Sửa lỗi + đo "sau" ✅ (2026-10-11)
+- **Fix A (lỗi #8 — rò rỉ đánh giá)**: train_anomaly.py tách train D01-D10 / threshold D11-D12 / test D13-D14 (không giao nhau); ghi `test_days` vào anomaly_threshold.json; evaluate_anomaly.py chỉ đánh giá test_days (tương thích JSON cũ).
+- **Fix B (#13-14)**: config.yaml bổ sung early_stopping_patience/min_delta (10/1e-4 room, 15/1e-4 anomaly) + topology.self_weight 0.75 (trùng default — không đổi hành vi).
+- **Fix C (#12)**: results/ chuẩn hóa (before_original + after_optimized + runlogs + run_info.txt + README.md tái lập).
+- Đo "sau": full pipeline + K-fold 5 × 2 model → `results/after_optimized/` (9 JSON + 11 runlogs + run_info.txt).
+- Kiểm chứng: 43/43 pytest pass; SQLite integrity ok, foreign_key_check 0 vi phạm (10 bảng).
 
-### Cơ sở dữ liệu (SQLite smarthome.db, schema v2)
-- Bảng: users, homes, rooms (_name_key chuẩn hóa NFC lowercase), collector_devices, collection_sessions, wifi_scans, predictions, sensor_samples, alerts; FK ON DELETE CASCADE; index theo (home_id, timestamp).
-- Toàn vẹn: sẽ chạy PRAGMA integrity_check + foreign_key_check ở Giai đoạn 4.
+## Giai đoạn 5 — Báo cáo ✅ (2026-10-11)
+- `BAO_CAO_KET_QUA.docx` (Times New Roman 13, bảng 11): (a) việc đã làm; (b) 15 lỗi + cách sửa; (c) bảng trước/sau **sinh trực tiếp từ results/*.json** qua `make_report.py`; (d) đối chiếu 11 yêu cầu: 9 ĐẠT, 2 ĐẠT MỘT PHẦN, 1 CHƯA ĐẠT (dữ liệu thực tế — tuần 9-10); (e) tồn tại + đề xuất; + tiến độ 12 tuần.
 
-### Bảng lỗi phát hiện (file:dòng — mức độ — trạng thái)
+## Bảng lỗi (file:dòng — mức độ — trạng thái)
 | # | Lỗi | Vị trí | Mức độ | Trạng thái |
 |---|-----|--------|--------|------------|
-| 1 | Dữ liệu anomaly mất cân bằng nghiêm trọng (7/loại vs 560 normal) | scripts/generate_synthetic_data.py:111-135 | CAO | ✅ Đã sửa (phiên 2): 50 mẫu/loại + biến thiên dwell ±20% |
-| 2 | Thiếu baseline CNN đơn giản để so sánh "trước/sau cải tiến" (yêu cầu đề cương) | scripts/train_room.py | CAO | ✅ Đã sửa (phiên 2): SimpleCNN + train/evaluate_simple_cnn.py + kfold |
-| 3 | Median relative-feature nhiễu khi < 3 AP hiển thị | src/smarthome/preprocessing.py:50-52 | TRUNG BÌNH | ✅ Đã sửa (phiên 1): fallback global_median/global_std |
-| 4 | Ngưỡng anomaly quantile 0.99 hard-code, không validate | scripts/train_anomaly.py (cũ:97-98) | TRUNG BÌNH | ✅ Đã sửa (phiên 1): grid search [0.90–0.995] trên val normal+anomaly |
-| 5 | Train cố định 35 epochs, không early stopping | scripts/train_room.py:68, train_anomaly.py:77 | TRUNG BÌNH | ✅ Đã sửa (phiên 1): early stopping + CosineAnnealingWarmRestarts |
-| 6 | Nighttime 0–5h không thực tế cho giám sát người cao tuổi | config.yaml:61-62 | TRUNG BÌNH | ✅ Đã sửa (phiên 2): 22–6h |
-| 7 | MobileSensorFusion chưa nối vào inference pipeline | src/smarthome/inference.py | TRUNG BÌNH | ✅ Đã sửa (phiên 1): process_mobile_sensor + fuse_alert nhận mobile_reasons |
-| 8 | **Rò rỉ đánh giá anomaly: các ngày dùng chọn ngưỡng (D13-D14) nằm trong tập đánh giá** | scripts/train_anomaly.py:84-89, scripts/evaluate_anomaly.py:27,40 | **CAO** | 🔧 Sẽ sửa trong Giai đoạn 4 phiên này (Fix A) |
-| 9 | Độ trễ chỉ đo model forward, thiếu e2e | scripts/evaluate_room.py:70-76 | THẤP | ✅ Đã sửa (phiên 1): thêm mean_e2e_latency_ms_per_sample |
-| 10 | topology self_weight hard-code 0.75 | src/smarthome/topology.py:5,26 | THẤP | ✅ Đã sửa (phiên 1): config topology.self_weight (script đọc config) |
-| 11 | Test set cân bằng hoàn hảo, không phản ánh thực tế | data/processed/room_test.csv | THẤP | 📝 Ghi nhận — giảm thiên lệch bằng K-fold CV |
-| 12 | **Chưa có results/ lưu chỉ số có cấu trúc** (đề cương: "cấu trúc lưu trữ kết quả có tổ chức") | (thiếu) | TRUNG BÌNH | 🔧 Sẽ làm trong phiên này (Fix C) |
-| 13 | config.yaml thiếu khóa early_stopping_patience/min_delta và topology.self_weight (script dùng default .get()) | config.yaml | THẤP | 🔧 Sẽ làm (Fix B — chỉ rõ ràng tài liệu, không đổi hành vi) |
-| 14 | Chưa có dữ liệu thực tế tại lab (đề cương mục 6) | data/ | CAO | ❌ CHƯA ĐẠT — cần thu thập thực tế (tuần 9-10 theo kế hoạch) |
+| 1 | Anomaly imbalance 7/loại vs 560 normal | generate_synthetic_data.py:111-135 | CAO | ✅ 50/loại + dwell ±20% |
+| 2 | Dữ liệu v1 quá dễ (baseline 100%) | generate_synthetic_data.py:19-25,34 | CAO | ✅ v2 thực tế (98.99%) |
+| 3 | Rò rỉ: ngày chọn ngưỡng nằm trong tập đánh giá | train_anomaly.py + evaluate_anomaly.py | CAO | ✅ Fix A — tách 3 phần |
+| 4 | Thiếu baseline CNN cho so sánh trước/sau | scripts/train_room.py | CAO | ✅ SimpleCNN + kfold |
+| 5 | Median nhiễu khi <3 AP | preprocessing.py:50-52 | TB | ✅ global fallback |
+| 6 | Quantile 0.99 cố định | train_anomaly.py (cũ) | TB | ✅ grid search |
+| 7 | Không early stopping | train_room/anomaly.py | TB | ✅ + Cosine restarts |
+| 8 | Nighttime 0-5h | config.yaml:61-62 | TB | ✅ 22-6h |
+| 9 | MobileSensorFusion chưa nối inference | inference.py | TB | ✅ process_mobile_sensor |
+| 10 | Không có results/ có cấu trúc | (thiếu) | TB | ✅ Fix C |
+| 11 | Thiếu đo e2e latency | evaluate_room.py | T | ✅ đã đo |
+| 12 | self_weight hard-code | topology.py + config | T | ✅ vào config |
+| 13 | Test set cân bằng giả tạo | room_test.csv | T | 📝 ghi nhận + kfold |
+| 14 | Config thiếu khóa early_stopping | config.yaml | T | ✅ Fix B |
+| 15 | Chưa có dữ liệu thực tế lab | data/ | CAO | ❌ CHƯA — tuần 9-10 theo kế hoạch |
 
-## Giai đoạn 3 — Đo baseline gốc ⏳
-- Phương pháp: `git worktree add --detach .tmp/baseline-wt 7b2f120` (code + dữ liệu gốc, không ảnh hưởng cây làm việc) → chạy pipeline: generate → prepare → train_room → evaluate_room → train_anomaly → evaluate_anomaly → train_baselines → copy metrics vào `results/before_original/` + run_info.txt → remove worktree.
-- Seed cố định 42 (config.yaml gốc). Python 3.14.5, torch CPU.
+## Còn lại (theo kế hoạch đề cương)
+1. **Tuần 9-10**: thu thập RSSI thực tế ≥2 phòng lab (android_collector + /api/collect) → train_home.py → đánh giá lại trên dữ liệu thật; test Android end-to-end; kiểm thử té ngã với accelerometer thật; sinh anomaly phân bố đều các ngày.
+2. **Tuần 11-12**: K-fold 10/leave-one-session-out trên dữ liệu thực; quantization/pruning nếu cần edge; hoàn thiện demo + slide.
 
-## Giai đoạn 4 — Sửa lỗi phiên này + đo "sau" ⏳
-- **Fix A (lỗi #8 — quan trọng nhất)**: tách 3 phần KHÔNG giao nhau cho anomaly: train D01-D10 (AE, chỉ normal) / threshold D11-D12 (normal + anomaly để chọn ngưỡng) / test D13-D14 (chỉ dùng để đánh giá, ghi `test_days` vào anomaly_threshold.json; evaluate_anomaly.py lọc theo đó, tương thích ngược với JSON cũ). → loại bỏ rò rỉ "chọn ngưỡng trên chính dữ liệu đánh giá".
-- **Fix B (#13)**: thêm lại khóa `early_stopping_patience/min_delta` (10/1e-4 room, 15/1e-4 anomaly) và `topology.self_weight: 0.75` vào config.yaml — trùng giá trị default mà script đang dùng, không đổi hành vi.
-- **Fix C (#12)**: tạo `results/` (README + before_original/ + after_optimized/ + run_info.txt mỗi bên).
-- Đo "sau": chạy lại toàn bộ pipeline (seed 42) với Fix A/B; kfold 5-fold × 2 model; pytest 43 test; PRAGMA integrity DB.
-
-## Giai đoạn 5 — Báo cáo ⏳
-- `BAO_CAO_KET_QUA.docx`: (a) việc đã làm; (b) lỗi + cách sửa; (c) bảng trước/sau **đọc trực tiếp từ results/*.json** (không nhập tay số liệu); (d) đối chiếu 11 yêu cầu đề cương (Đạt/Đạt một phần/Chưa đạt + bằng chứng đường dẫn + số liệu); (e) tồn tại + đề xuất; + bảng tiến độ 12 tuần. Font Times New Roman 13 (bảng 11-12).
-
-## Ghi chú ràng buộc đang áp dụng
-- Làm trên nhánh `fix/optimize-training` (đã có từ phiên 1), dữ liệu gốc trong `backup_original/` và commit gốc `7b2f120` không bị ghi đè (baseline chạy trong worktree riêng).
-- Không git push. Không sửa/xóa bản ghi dữ liệu, không đổi schema DB trong phiên này.
-- Số liệu trong báo cáo chỉ lấy từ JSON kết quả chạy thật trong `results/`.
+## Vị trí kết thúc phiên
+5/5 giai đoạn hoàn thành. Bài toán "tối ưu + sửa lỗi + báo cáo đối chiếu đề cương trên dữ liệu mô phỏng" đã đóng; bước kế tiếp bắt buộc cần **thiết bị/thu thập thực tế** (ngoài phạm vi phần mềm).

@@ -1,0 +1,27 @@
+label: before_original — trạng thái gốc trước tối ưu
+nguồn: git archive commit 7b2f120 "Initial commit before optimization" (loại trừ android_collector/, pipeline không dùng tới)
+phiên chạy: 2026-10-11 · Python 3.14.5 · torch CPU · Windows (PowerShell)
+seed: 42 — cố định trong config.yaml gốc và set_seed() ở mọi script
+
+dữ liệu (synthetic v1):
+- data/raw/wifi_fingerprints.csv: 4800 dòng, 8 session (S01–S08), 5 phòng × 960, 12 AP
+- generate_synthetic_data.py bản gốc: signature +14/+9 dB, noise sigma=3.0, missing 8% cố định
+- data/anomaly/location_events.csv: 588 sự kiện, 14 ngày; 560 normal + 7 mẫu/loại × 4 loại anomaly
+
+pipeline chạy (đúng chuỗi gốc, Makefile gốc):
+1. generate_synthetic_data.py
+2. prepare_data.py — split theo session 6/1/1 (S01–S06 train / S07 val / S08 test), preprocessor fit CHỈ trên train
+3. train_room.py — 35 epochs, KHÔNG early stopping, KHÔNG augmentation
+4. evaluate_room.py — test trên S08
+5. train_anomaly.py — 35 epochs, ngưỡng = quantile 0.99 fix cứng trên validation normal
+6. evaluate_anomaly.py — đánh giá MỌI ngày (protocol cũ, có rò rỉ: D13–D14 đã dùng chọn ngưỡng nằm trong tập đánh giá)
+7. train_baselines.py — kNN / RandomForest / MLP trên cùng window dataset
+
+kết quả chính (đọc từ *.json cùng thư mục, không hiệu chỉnh):
+- room_test: accuracy=1.0000, macro_f1=1.0000, mean_inference_ms=0.0270
+- room_val: macro_f1=1.0000
+- anomaly (protocol cũ): ae_only P=0.6923 R=0.3214 F1=0.4390; hybrid P=0.8710 R=0.9643 F1=0.9153; samples=490; threshold=1.65440 (quantile 0.99)
+- baselines: RandomForest acc=0.9983, MLP acc=0.9933, kNN acc=0.9832
+
+nhận định: Accuracy 100% trên phân loại phòng là dấu hiệu dữ liệu quá dễ (signature cứng +14/+9 dB) — không phản ánh thực nghiệm; là căn cứ cho lỗi #1 (phiên 2 đã sửa dữ liệu).
+logs đầy đủ: runlogs/1_gen.log … 7_baselines.log

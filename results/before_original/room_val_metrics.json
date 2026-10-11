@@ -1,0 +1,86 @@
+{
+  "accuracy": 1.0,
+  "macro_f1": 1.0,
+  "confusion_matrix": [
+    [
+      116,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      120,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      120,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      120,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      120
+    ]
+  ],
+  "classification_report": {
+    "Bedroom": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 116.0
+    },
+    "Corridor": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 120.0
+    },
+    "Bathroom": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 120.0
+    },
+    "LivingRoom": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 120.0
+    },
+    "Kitchen": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 120.0
+    },
+    "accuracy": 1.0,
+    "macro avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 596.0
+    },
+    "weighted avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 596.0
+    }
+  }
+}
