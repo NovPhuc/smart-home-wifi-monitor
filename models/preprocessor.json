@@ -15,5 +15,7 @@
   ],
   "missing_rssi": -100.0,
   "min_rssi": -100.0,
-  "max_rssi": -30.0
+  "max_rssi": -30.0,
+  "global_median": -62.5099983215332,
+  "global_std": 11.534964561462402
 }

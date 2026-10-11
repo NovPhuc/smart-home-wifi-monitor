@@ -13,6 +13,9 @@ class RSSIPreprocessor:
     missing_rssi: float = -100.0
     min_rssi: float = -100.0
     max_rssi: float = -30.0
+    # Global statistics for fallback when too few APs visible
+    global_median: float = -65.0
+    global_std: float = 15.0
 
     @classmethod
     def fit(
@@ -29,7 +32,17 @@ class RSSIPreprocessor:
         ap_columns = [c for c in df.columns if c not in metadata]
         if not ap_columns:
             raise ValueError("No AP/RSSI columns were found in dataframe.")
-        return cls(ap_columns=ap_columns, missing_rssi=missing_rssi, min_rssi=min_rssi, max_rssi=max_rssi)
+        # Compute global RSSI statistics for fallback
+        all_rssi = []
+        for ap in ap_columns:
+            vals = df[ap].values
+            vals = vals[(vals != missing_rssi) & (~np.isnan(vals))]
+            all_rssi.extend(vals)
+        all_rssi = np.asarray(all_rssi, dtype=np.float32)
+        global_median = float(np.median(all_rssi)) if len(all_rssi) > 0 else -65.0
+        global_std = float(np.std(all_rssi)) if len(all_rssi) > 1 else 15.0
+        return cls(ap_columns=ap_columns, missing_rssi=missing_rssi, min_rssi=min_rssi, max_rssi=max_rssi,
+                   global_median=global_median, global_std=global_std)
 
     def _raw_vector(self, row: pd.Series | dict) -> np.ndarray:
         vals = []
@@ -48,7 +61,11 @@ class RSSIPreprocessor:
         absolute = (clipped - self.min_rssi) / denom
 
         visible = rssi[mask > 0]
-        median = float(np.median(visible)) if len(visible) else self.missing_rssi
+        # Use sample median only if we have enough visible APs (>=3), else fall back to global median
+        if len(visible) >= 3:
+            median = float(np.median(visible))
+        else:
+            median = self.global_median
         relative = np.clip((rssi - median) / (denom / 2.0), -1.0, 1.0)
         relative[mask == 0] = -1.0
 

@@ -1,0 +1,44 @@
+
+TRƯỜNG ĐẠI HỌC CÔNG THƯƠNG THÀNH PHỐ HỒ CHÍ MINH
+KHOA CÔNG NGHỆ THÔNG TIN
+ĐỀ CƯƠNG CHI TIẾT
+KHÓA LUẬN CỬ NHÂN NGÀNH CNTT NĂM HỌC 2026 - 2027
+1. Mã đề tài: 336
+2. Tên đề tài: Xây dựng hệ thống định vị trong nhà theo phòng dựa trên WiFi Fingerprinting phục vụ giám sát sức khỏe và phát hiện bất thường di chuyển cho người cao tuổi trong Nhà thông minh.
+3. Định hướng đề tài:
+☐ Định hướng ứng dụng          ☑ Định hướng nghiên cứu          ☐ Định hướng MMT
+4. Thông tin GVHD
+5. Nhóm sinh viên thực hiện đề tài
+6. Mục tiêu: (Ghi rõ mục tiêu, nhiệm vụ nghiên cứu của đề tài cần đạt được)
+Tổng quan hệ thống Smart Home và nhu cầu giám sát an toàn không xâm phạm quyền riêng tư người cao tuổi.
+Khảo sát các phương pháp Room-level Fingerprinting và kỹ thuật nhận dạng bất thường trên chuỗi vị trí di chuyển.
+Đề xuất cải tiến mô hình phân loại phòng nhẹ (lightweight CNN/1D-CNN) kết hợp mô-đun phát hiện bất thường (ví dụ: autoencoder tái tạo quỹ đạo di chuyển) để cảnh báo té ngã/bất động bất thường.
+Cài đặt, thực nghiệm tại mô hình nhà nhỏ (lab/phòng thực tế), đánh giá độ chính xác phân loại phòng và độ trễ cảnh báo.
+7. Yêu cầu
+Các nội dung cụ thể cần thực hiện:
+Tổng quan về đề tài: Định vị trong nhà theo mức phòng (room-level indoor localization) dựa trên WiFi Fingerprinting là hướng tiếp cận được ứng dụng rộng rãi trong giám sát người cao tuổi tại nhà thông minh nhờ tận dụng hạ tầng WiFi sẵn có, chi phí thấp và ít xâm phạm quyền riêng tư hơn so với camera giám sát. Việc kết hợp định vị theo phòng với kỹ thuật phát hiện bất thường trên chuỗi vị trí (té ngã, bất động kéo dài) có ý nghĩa khoa học và thực tiễn trong bối cảnh già hóa dân số, giúp cảnh báo sớm cho người thân/nhân viên y tế mà không cần thiết bị đeo hay giám sát hình ảnh liên tục.
+Tìm hiểu thuật toán áp dụng cho bài toán: Xây dựng mô hình phân loại phòng dựa trên vector RSSI thu thập từ các access point sẵn có bằng mạng nơ-ron tích chập nhẹ (lightweight CNN/1D-CNN); kết hợp mạng tự mã hóa (autoencoder) học tái tạo quỹ đạo di chuyển bình thường, từ đó dựa vào sai số tái tạo (reconstruction error) để phát hiện các mẫu bất thường (đứng yên quá lâu, di chuyển bất thường, nghi ngờ té ngã).
+Cài đặt thuật toán: Thu thập RSSI theo từng phòng bằng router/access point có sẵn kết hợp ứng dụng di động trên Android; tiền xử lý, chuẩn hóa dữ liệu; huấn luyện mô hình CNN/1D-CNN phân loại phòng; huấn luyện mô-đun autoencoder trên dữ liệu quỹ đạo bình thường; mô phỏng các kịch bản bất thường (đứng yên lâu, di chuyển bất thường) để kiểm thử mô-đun phát hiện.
+Đánh giá kết quả thực nghiệm: So sánh độ chính xác phân loại phòng trước/sau cải tiến; đánh giá tỉ lệ phát hiện đúng/sai của cảnh báo bất thường; đo thời gian xử lý theo thời gian thực.
+Các chỉ số đánh giá: Độ chính xác phân loại phòng (Accuracy, %); Precision/Recall cho phát hiện bất thường; thời gian xử lý (độ trễ) theo thời gian thực.
+Demo: Giao diện dashboard (Flask) hiển thị vị trí hiện tại theo phòng và phát cảnh báo khi hệ thống phát hiện bất thường.
+8. Môi trường thực hiện
+Phần cứng: Router WiFi gia dụng, smartphone Android.
+Ngôn ngữ/công cụ: Python, PyTorch, Jupyter Notebook, Flask (backend demo).
+9. Thời gian thực hiện: 12 tuần (từ ngày 17/8/2026 tới ngày 08/11/2026)
+10. Thang điểm
+11. Thời gian và các công việc trong tuần
+12. Tài liệu tham khảo
+[1] Torres-Sospedra, J., Belmonte-Fernández, Ó., Montoliu, R., Trilles, S., & Calia, A. (2017). In-home monitoring system based on WiFi fingerprints for ambient assisted living. Journal of Ambient Intelligence and Smart Environments, 9(3), 283-298.
+[2] Zhao, Z., Kuendig, S., Carrera, J., Carron, B., Braun, T., & Rolim, J. (2017). Indoor location for smart environments with wireless sensor and actuator networks. arXiv preprint arXiv:1705.09543.
+[3] Do, T., Le, X., Tran-Hong, N., & Phuoc Nguyen, T. H. (2026). Human fall detection and indoor localization using WiFi sensing approach. In Proceedings of the 14th Conference on Information Technology and its Applications (CITA 2025), Lecture Notes in Networks and Systems, Vol. 1581. Springer.
+[4] Chen, T., Li, X., Li, H., & Zhu, G. (2024). Deep learning-based fall detection using commodity Wi-Fi. Journal of Information and Intelligence, 2(4), 355-364.
+[5] Chu, Y., Cumanan, K., Sankarpandi, S. K., Smith, S., & Dobre, O. A. (2023). Deep learning-based fall detection using WiFi channel state information. IEEE Access, 11, 83763-83780.
+[6] Xia, Z., et al. (2023). WiFi-based indoor passive fall detection for medical Internet of Things. Computers and Electrical Engineering.
+[7] Cardenas, J. D., Gutierrez, C. A., & Aguilar-Ponce, R. (2023). Deep learning multi-class approach for human fall detection based on Doppler signatures. International Journal of Environmental Research and Public Health, 20(2), 1123.
+[8] Nooruddin, S., Islam, M. M., Sharna, F. A., Alhetari, H., & Kabir, M. N. (2022). Sensor-based fall detection systems: a review. Journal of Ambient Intelligence and Humanized Computing, 13(5), 2735-2751.
+13. Một số yêu cầu khác
+Số lượng SV tối đa thực hiện đề tài: 3 sinh viên.
+Có khả năng và tư duy lập trình, đọc hiểu tài liệu tiếng Anh; có kiến thức cơ bản về machine learning/deep learning.
+Gặp giảng viên hướng dẫn ít nhất 1 lần/tuần, thực hiện đề tài theo sự phân công của giảng viên hướng dẫn. Trước mỗi buổi báo cáo, sinh viên phải tích hợp những nội dung được phân công vào chung trong một tài liệu/phần mềm.
+Tp.HCM, ngày ..... tháng ..... năm 2026

@@ -16,25 +16,53 @@ def make_room_fingerprints(config: dict, sessions: int = 8, scans_per_room: int 
     rooms = config["rooms"]
     ap_names = [f"AP_{i+1:02d}" for i in range(aps)]
 
+    # Base RSSI centers per room - more realistic overlapping distributions
     base = {}
     for r_idx, room in enumerate(rooms):
-        center = rng.uniform(-82, -48, size=aps)
-        # Inject a room-specific signature so adjacent rooms are similar but separable.
-        center[(r_idx * 2) % aps] += 14
-        center[(r_idx * 2 + 1) % aps] += 9
-        base[room] = np.clip(center, -95, -32)
+        center = rng.uniform(-80, -50, size=aps)
+        # Inject a mild room-specific signature (reduced from +14/+9 to +6/+4)
+        # This makes rooms separable but with realistic overlap
+        center[(r_idx * 2) % aps] += 6
+        center[(r_idx * 2 + 1) % aps] += 4
+        base[room] = np.clip(center, -90, -35)
+
+    # Environmental interference that affects all rooms (neighbor WiFi, microwave, etc.)
+    env_interference = rng.normal(0, 2.0, size=aps)
 
     rows = []
     ts = 1_780_000_000
     for s in range(sessions):
-        session_shift = rng.normal(0, 2.2, size=aps)
-        device_shift = rng.normal(0, 1.4)
+        # Session-level variations (device position, orientation, people movement)
+        session_shift = rng.normal(0, 3.0, size=aps)
+        device_shift = rng.normal(0, 2.0)
+        # Per-session AP-specific drift (some APs more stable than others)
+        ap_drift = rng.normal(0, 1.5, size=aps)
+
         for room in rooms:
             for i in range(scans_per_room):
-                vals = base[room] + session_shift + device_shift + rng.normal(0, 3.0, size=aps)
-                # random missing APs
-                miss = rng.random(aps) < 0.08
+                # Increased noise from 3.0 to 6.0 for more realistic variance
+                # Added environmental interference
+                vals = (base[room]
+                        + session_shift
+                        + device_shift
+                        + ap_drift
+                        + env_interference
+                        + rng.normal(0, 6.0, size=aps))
+
+                # More realistic missing AP pattern: correlated missingness (e.g., far APs)
+                # Base missing rate 15%, higher for distant APs
+                base_miss_prob = 0.15
+                dist_factor = np.linspace(0.5, 1.5, aps)  # Farther APs more likely missing
+                miss_prob = base_miss_prob * dist_factor
+                miss = rng.random(aps) < miss_prob
                 vals[miss] = -100
+
+                # Occasional burst interference (microwave, bluetooth) affecting 2-3 APs
+                if rng.random() < 0.05:
+                    burst_aps = rng.choice(aps, size=rng.integers(2, 4), replace=False)
+                    vals[burst_aps] += rng.normal(-10, 5, size=len(burst_aps))
+                    vals = np.clip(vals, -100, -30)
+
                 row = {
                     "timestamp": ts,
                     "session_id": f"S{s+1:02d}",
@@ -90,21 +118,24 @@ def make_events(config: dict, days: int = 14) -> pd.DataFrame:
             ]
             room, dwell, kind = anomaly_specs[(day - (days - 4)) % len(anomaly_specs)]
             hour = 2.5 if kind == "night_activity" else hour
-            for k in range(7):
+            # Increased from 7 to 50 samples per anomaly type for better training balance
+            for k in range(50):
                 rr = room
                 if kind == "unusual_transition_pattern":
-                    rr = ["Bedroom", "Kitchen", "Bedroom", "Kitchen", "Bedroom", "Kitchen", "Bedroom"][k]
+                    rr = ["Bedroom", "Kitchen", "Bedroom", "Kitchen", "Bedroom", "Kitchen", "Bedroom"][k % 7]
+                # Add some variation to dwell minutes
+                dwell_var = dwell if k == 0 else max(1.0, dwell / 4) * rng.uniform(0.8, 1.2)
                 rows.append({
                     "timestamp": ts,
                     "day_id": f"D{day+1:02d}",
                     "room": rr,
-                    "dwell_minutes": dwell if k == 0 else max(1.0, dwell / 4),
-                    "hour": hour,
-                    "confidence": 0.92,
+                    "dwell_minutes": round(float(dwell_var), 3),
+                    "hour": round(float(hour), 3),
+                    "confidence": round(float(rng.uniform(0.82, 0.99)), 3),
                     "is_anomaly": 1,
                     "anomaly_type": kind,
                 })
-                ts += int(max(2, dwell * 60 / 4))
+                ts += int(max(2, dwell_var * 60 / 4))
     return pd.DataFrame(rows)
 
 

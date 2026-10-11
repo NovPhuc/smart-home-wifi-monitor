@@ -20,6 +20,7 @@ from smarthome.config import load_config
 from smarthome.preprocessing import RSSIPreprocessor
 from smarthome.dataset import RoomWindowDataset
 from smarthome.models import RoomNetLite
+from smarthome.topology import TopologyFilter
 from smarthome.metrics import room_metrics
 from smarthome.utils import save_json
 
@@ -64,16 +65,31 @@ def main():
     )
     model.eval()
 
+    # Topology filter for end-to-end latency measurement
+    topo_filter = TopologyFilter(rooms, cfg["room_topology"])
+
     ys, ps = [], []
-    latencies = []
+    latencies_model = []
+    latencies_e2e = []
     with torch.no_grad():
         for x, y, _ in loader:
+            # Model-only latency
             x = x.to(device)
             t0 = time.perf_counter()
             logits, _ = model(x)
             if device == "cuda":
                 torch.cuda.synchronize()
-            latencies.append((time.perf_counter() - t0) * 1000.0 / x.shape[0])
+            latencies_model.append((time.perf_counter() - t0) * 1000.0 / x.shape[0])
+            
+            # End-to-end latency (softmax + topology filter) - per sample
+            probs = torch.softmax(logits, dim=-1).cpu().numpy()
+            t0_e2e = time.perf_counter()
+            for i in range(probs.shape[0]):
+                topo_filter.update(probs[i])
+            latencies_e2e.append((time.perf_counter() - t0_e2e) * 1000.0 / x.shape[0])
+            # Reset topology filter for next batch
+            topo_filter.reset()
+            
             ys.extend(y.numpy().tolist())
             ps.extend(logits.argmax(1).cpu().numpy().tolist())
 
@@ -103,7 +119,10 @@ def main():
             raise
 
     result["mean_inference_ms_per_sample"] = float(
-        sum(latencies) / max(len(latencies), 1)
+        sum(latencies_model) / max(len(latencies_model), 1)
+    )
+    result["mean_e2e_latency_ms_per_sample"] = float(
+        sum(latencies_e2e) / max(len(latencies_e2e), 1)
     )
     save_json(result, Path(args.models_dir) / "room_test_metrics.json")
     print(json.dumps(result, ensure_ascii=False))

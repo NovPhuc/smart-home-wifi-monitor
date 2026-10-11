@@ -12,7 +12,7 @@ from .preprocessing import RSSIPreprocessor
 from .models import RoomNetLite, GRUAutoencoder
 from .topology import TopologyFilter
 from .dataset import AnomalyFeatureBuilder
-from .anomaly import RuleEngine, OnlineAnomalyDetector, fuse_alert
+from .anomaly import RuleEngine, OnlineAnomalyDetector, fuse_alert, MobileSensorFusion, MobileSensorEvent
 from .activity import ActivityMonitor
 
 
@@ -37,7 +37,8 @@ class SmartHomeInferenceEngine:
 
         self.window_size = int(config["data"]["window_size"])
         self.rssi_buffer = deque(maxlen=self.window_size)
-        self.topology_filter = TopologyFilter(self.rooms, config["room_topology"])
+        topology_self_weight = float(config.get("topology", {}).get("self_weight", 0.75))
+        self.topology_filter = TopologyFilter(self.rooms, config["room_topology"], topology_self_weight)
 
         self.anomaly_detector = None
         threshold_path = self.artifact_dir / "anomaly_threshold.json"
@@ -64,6 +65,13 @@ class SmartHomeInferenceEngine:
                 device=self.device,
             )
 
+        # Mobile sensor fusion for fall detection
+        mobile_cfg = config.get("mobile_sensor", {})
+        self.mobile_fusion = MobileSensorFusion(
+            impact_followup_seconds=mobile_cfg.get("impact_followup_seconds", 20.0),
+            still_threshold=mobile_cfg.get("still_threshold", 0.25),
+        )
+
         self.rule_engine = RuleEngine(self.rooms, config["room_topology"], config["rules"])
         activity_cfg = config.get("activity", {})
         self.activity_monitor = ActivityMonitor(
@@ -85,6 +93,10 @@ class SmartHomeInferenceEngine:
         self.topology_filter.reset()
         if self.anomaly_detector:
             self.anomaly_detector.reset()
+        self.mobile_fusion = MobileSensorFusion(
+            impact_followup_seconds=self.config.get("mobile_sensor", {}).get("impact_followup_seconds", 20.0),
+            still_threshold=self.config.get("mobile_sensor", {}).get("still_threshold", 0.25),
+        )
         self.rule_engine = RuleEngine(self.rooms, self.config["room_topology"], self.config["rules"])
         self.activity_monitor.reset()
         self.current_room = None
@@ -95,8 +107,36 @@ class SmartHomeInferenceEngine:
         self.last_room_confidence = 1.0
         self.started_at = None
 
+    def process_mobile_sensor(self, acceleration: dict[str, float], device_id: str = "phone", timestamp: float | None = None) -> list[str]:
+        """Process mobile sensor (accelerometer) data for fall detection."""
+        timestamp = float(timestamp if timestamp is not None else time.time())
+        # Simple magnitude calculation
+        mag = float(np.sqrt(sum(float(acceleration.get(k, 0.0))**2 for k in ("x", "y", "z"))))
+        
+        # Determine state based on magnitude (simplified version of MobileSensorMonitor)
+        mobile_cfg = self.config.get("mobile_sensor", {})
+        impact_threshold = mobile_cfg.get("impact_threshold", 18.0)
+        movement_threshold = mobile_cfg.get("movement_threshold", 0.8)
+        still_threshold = mobile_cfg.get("still_threshold", 0.25)
+
+        if mag >= impact_threshold:
+            state = "IMPACT_RECORDED"
+        elif mag >= movement_threshold:
+            state = "MOVING"
+        else:
+            state = "STILL"
+
+        event = MobileSensorEvent(
+            device_id=device_id,
+            timestamp=timestamp,
+            state=state,
+            motion_magnitude=mag,
+            possible_impact=(state == "IMPACT_RECORDED"),
+        )
+        return self.mobile_fusion.update(event)
+
     @torch.no_grad()
-    def process_scan(self, wifi: dict[str, float], timestamp: float | None = None) -> dict:
+    def process_scan(self, wifi: dict[str, float], timestamp: float | None = None, mobile_acceleration: dict[str, float] | None = None, mobile_device_id: str = "phone") -> dict:
         timestamp = float(timestamp if timestamp is not None else time.time())
         if self.started_at is None:
             self.started_at = timestamp
@@ -150,7 +190,13 @@ class SmartHomeInferenceEngine:
         activity = self.activity_monitor.update(wifi, room, timestamp)
         if activity.inactive_minutes > self.activity_monitor.inactivity_minutes:
             reasons.append(f"No detected movement for {activity.inactive_minutes:.1f} min")
-        alert = fuse_alert(decision_anomaly_score, threshold, reasons)
+
+        # Process mobile sensor if provided
+        mobile_reasons = []
+        if mobile_acceleration is not None:
+            mobile_reasons = self.process_mobile_sensor(mobile_acceleration, mobile_device_id, timestamp)
+
+        alert = fuse_alert(decision_anomaly_score, threshold, reasons, mobile_reasons)
         anomaly_score = self.last_anomaly_score
 
         event = {

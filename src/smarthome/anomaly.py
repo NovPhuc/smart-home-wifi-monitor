@@ -94,13 +94,84 @@ class OnlineAnomalyDetector:
         return self.last_score
 
 
-def fuse_alert(anomaly_score: float | None, threshold: float | None, rule_reasons: list[str]) -> AlertResult:
+@dataclass
+class MobileSensorEvent:
+    """Event from mobile sensor (phone accelerometer)."""
+    device_id: str
+    timestamp: float
+    state: str  # "IMPACT_RECORDED", "MOVING", "STILL", etc.
+    motion_magnitude: float
+    possible_impact: bool
+    confirmed_fall: bool = False
+
+
+class MobileSensorFusion:
+    """
+    Fuse mobile sensor (accelerometer) events with WiFi-based anomaly detection.
+    Fall detection logic: IMPACT_RECORDED followed by STILL (low motion) within followup window.
+    """
+    def __init__(self, impact_followup_seconds: float = 20.0, still_threshold: float = 0.25):
+        self.impact_followup_seconds = impact_followup_seconds
+        self.still_threshold = still_threshold
+        self.pending_impacts: dict[str, float] = {}  # device_id -> impact_timestamp
+        self.last_state: dict[str, str] = {}
+
+    def update(self, event: MobileSensorEvent) -> list[str]:
+        """Process a mobile sensor event, return fall-related alert reasons if any."""
+        reasons: list[str] = []
+        device_id = event.device_id
+
+        if event.state == "IMPACT_RECORDED":
+            self.pending_impacts[device_id] = event.timestamp
+            reasons.append(f"Mobile sensor: impact detected (magnitude={event.motion_magnitude:.1f}g)")
+
+        elif event.state == "STILL" and device_id in self.pending_impacts:
+            elapsed = event.timestamp - self.pending_impacts[device_id]
+            if elapsed <= self.impact_followup_seconds:
+                # Impact followed by stillness within followup window = potential fall
+                reasons.append(
+                    f"Possible fall detected: impact followed by stillness "
+                    f"({elapsed:.1f}s after impact, magnitude={event.motion_magnitude:.3f}g)"
+                )
+                event.confirmed_fall = True
+            self.pending_impacts.pop(device_id, None)
+
+        # Clean up old pending impacts
+        current_time = event.timestamp
+        expired = [d for d, t in self.pending_impacts.items() if current_time - t > self.impact_followup_seconds]
+        for d in expired:
+            self.pending_impacts.pop(d, None)
+
+        self.last_state[device_id] = event.state
+        return reasons
+
+
+def fuse_alert(
+    anomaly_score: float | None,
+    threshold: float | None,
+    rule_reasons: list[str],
+    mobile_reasons: list[str] | None = None,
+) -> AlertResult:
+    mobile_reasons = mobile_reasons or []
     deep_anomaly = anomaly_score is not None and threshold is not None and anomaly_score > threshold
+
+    has_mobile_fall = any("fall" in r.lower() or "impact" in r.lower() for r in mobile_reasons)
+
+    if deep_anomaly and rule_reasons and has_mobile_fall:
+        return AlertResult("CRITICAL", anomaly_score, ["High trajectory reconstruction error", *rule_reasons, *mobile_reasons])
     if deep_anomaly and rule_reasons:
         return AlertResult("CRITICAL", anomaly_score, ["High trajectory reconstruction error", *rule_reasons])
+    if deep_anomaly and has_mobile_fall:
+        return AlertResult("CRITICAL", anomaly_score, ["High trajectory reconstruction error", *mobile_reasons])
     if deep_anomaly:
         return AlertResult("WARNING", anomaly_score, ["High trajectory reconstruction error"])
+    if has_mobile_fall:
+        return AlertResult("CRITICAL", anomaly_score, ["Fall detected by mobile sensor", *mobile_reasons])
+    if rule_reasons and has_mobile_fall:
+        return AlertResult("CRITICAL", anomaly_score, [*rule_reasons, *mobile_reasons])
     if rule_reasons:
         severity = "CRITICAL" if len(rule_reasons) >= 2 else "WARNING"
         return AlertResult(severity, anomaly_score, rule_reasons)
+    if has_mobile_fall:
+        return AlertResult("CRITICAL", anomaly_score, mobile_reasons)
     return AlertResult("NORMAL", anomaly_score, [])

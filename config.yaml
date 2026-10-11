@@ -58,8 +58,8 @@ rules:
     Bathroom: 30
     LivingRoom: 180
     Kitchen: 90
-  nighttime_start_hour: 0
-  nighttime_end_hour: 5
+  nighttime_start_hour: 22
+  nighttime_end_hour: 6
   suspicious_night_transitions: 4
   nighttime_sensitive_rooms: [Kitchen, LivingRoom]
   nighttime_max_dwell_minutes: 20
