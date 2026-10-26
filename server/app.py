@@ -104,6 +104,25 @@ def require_active_home():
     return home, None
 
 
+def require_owned_home():
+    """Chủ nhà mới được thay đổi dữ liệu dùng chung.
+
+    Thành viên gia nhập qua mã chia sẻ 6 số chỉ được xem: vị trí, lịch sử,
+    cảnh báo, tiến độ hiệu chuẩn và metric. Mọi thao tác ghi (phòng, thiết bị,
+    thu thập, huấn luyện, xóa) phải quay về tài khoản chủ nhà.
+    """
+    user_id = flask_session.get("user_id")
+    if not user_id:
+        return None, (jsonify({"error": "AUTH_REQUIRED"}), 401)
+    home_id = flask_session.get("active_home_id")
+    home = db.get_owned_home(int(user_id), int(home_id)) if home_id else None
+    if home:
+        return home, None
+    if active_home():
+        return None, (jsonify({"error": "HOME_OWNER_REQUIRED", "detail": "Tài khoản chia sẻ chỉ có quyền xem"}), 403)
+    return None, (jsonify({"error": "HOME_REQUIRED"}), 400)
+
+
 def bearer_device() -> dict | None:
     header = request.headers.get("Authorization", "")
     if not header.lower().startswith("bearer "):
@@ -123,6 +142,22 @@ def request_home_context() -> tuple[dict | None, dict | None]:
             home = connection.execute("SELECT * FROM homes WHERE id=?", (device["home_id"],)).fetchone()
         return (dict(home) if home else None), device
     return active_home(), None
+
+
+def require_mutation_context() -> tuple[dict | None, dict | None, Response | None]:
+    """Context ghi dữ liệu: device token hoặc tài khoản chủ nhà.
+
+    Bearer device token là mã do chủ nhà tạo nên được coi như chủ nhà; đăng
+    nhập bằng session thì tài khoản thành viên (qua mã chia sẻ) không được ghi.
+    """
+    home, device = request_home_context()
+    if not home:
+        return None, None, (jsonify({"error": "Đăng nhập hoặc cung cấp Bearer device token"}), 401)
+    if device is None:
+        user_id = flask_session.get("user_id")
+        if not user_id or not db.is_home_owner(home["id"], int(user_id)):
+            return None, None, (jsonify({"error": "HOME_OWNER_REQUIRED", "detail": "Tài khoản chia sẻ chỉ có quyền xem"}), 403)
+    return home, device, None
 
 
 def home_progress(home_id: int) -> dict:
@@ -242,7 +277,12 @@ def login():
     homes = db.list_homes(user["id"])
     if homes:
         flask_session["active_home_id"] = homes[0]["id"]
-    return jsonify({"ok": True})
+    return jsonify({
+        "ok": True,
+        "user": {"id": user["id"], "email": user["email"], "display_name": user["display_name"]},
+        "homes": homes,
+        "active_home": homes[0] if homes else None,
+    })
 
 
 @app.post("/api/auth/logout")
@@ -311,10 +351,83 @@ def modify_home(home_id: int):
     return jsonify({"ok": changed}) if changed else (jsonify({"error": "Không tìm thấy nhà"}), 404)
 
 
+@app.get("/api/homes/<int:home_id>/share")
+@login_required
+def get_share(home_id: int):
+    home, error = require_owned_home_by_id(home_id)
+    if error:
+        return error
+    share = db.active_share(home_id)
+    ttl = float(cfg.get("sharing", {}).get("code_ttl_hours", 24))
+    return jsonify({"share": share, "ttl_hours": ttl})
+
+
+@app.post("/api/homes/<int:home_id>/share")
+@login_required
+def rotate_share(home_id: int):
+    home, error = require_owned_home_by_id(home_id)
+    if error:
+        return error
+    ttl = float(cfg.get("sharing", {}).get("code_ttl_hours", 24))
+    share = db.create_share_code(home_id, int(flask_session["user_id"]), ttl)
+    return jsonify({"share": share, "ttl_hours": ttl}), 201
+
+
+@app.delete("/api/homes/<int:home_id>/share")
+@login_required
+def drop_share(home_id: int):
+    home, error = require_owned_home_by_id(home_id)
+    if error:
+        return error
+    return jsonify({"ok": db.revoke_share_code(home_id)})
+
+
+@app.get("/api/homes/<int:home_id>/members")
+@login_required
+def members(home_id: int):
+    home, error = require_owned_home_by_id(home_id)
+    if error:
+        return error
+    return jsonify(db.list_home_members(home_id))
+
+
+@app.delete("/api/homes/<int:home_id>/members/<int:user_id>")
+@login_required
+def kick_member(home_id: int, user_id: int):
+    home, error = require_owned_home_by_id(home_id)
+    if error:
+        return error
+    return jsonify({"ok": db.remove_home_member(home_id, user_id)})
+
+
+@app.post("/api/homes/join")
+@login_required
+def join_home():
+    payload = request.get_json(force=True, silent=False) or {}
+    code = str(payload.get("code", "")).strip()
+    if not code.isdigit() or len(code) != 6:
+        return jsonify({"error": "Mã chia sẻ gồm 6 chữ số"}), 400
+    try:
+        home = db.join_home_by_code(int(flask_session["user_id"]), code)
+    except LookupError as exc:
+        return jsonify({"error": str(exc)}), 404
+    flask_session["active_home_id"] = home["id"]
+    return jsonify({"joined_home": home})
+
+
+def require_owned_home_by_id(home_id: int):
+    home = db.get_owned_home(int(flask_session["user_id"]), home_id)
+    if not home:
+        if db.get_home(int(flask_session["user_id"]), home_id):
+            return None, (jsonify({"error": "HOME_OWNER_REQUIRED", "detail": "Tài khoản chia sẻ chỉ có quyền xem"}), 403)
+        return None, (jsonify({"error": "Không tìm thấy nhà"}), 404)
+    return home, None
+
+
 @app.route("/api/rooms", methods=["GET", "POST"])
 @login_required
 def rooms():
-    home, error = require_active_home()
+    home, error = require_owned_home() if request.method == "POST" else require_active_home()
     if error:
         return error
     if request.method == "GET":
@@ -335,7 +448,7 @@ def rooms():
 @app.route("/api/rooms/<int:room_id>", methods=["PATCH", "DELETE"])
 @login_required
 def modify_room(room_id: int):
-    home, error = require_active_home()
+    home, error = require_owned_home()
     if error:
         return error
     if request.method == "DELETE":
@@ -359,7 +472,7 @@ def modify_room(room_id: int):
 @app.route("/api/devices", methods=["GET", "POST"])
 @login_required
 def devices():
-    home, error = require_active_home()
+    home, error = require_owned_home() if request.method == "POST" else require_active_home()
     if error:
         return error
     if request.method == "GET":
@@ -373,7 +486,7 @@ def devices():
 @app.delete("/api/devices/<int:device_id>")
 @login_required
 def revoke_device(device_id: int):
-    home, error = require_active_home()
+    home, error = require_owned_home()
     if error:
         return error
     return jsonify({"ok": db.revoke_device(home["id"], device_id)})
@@ -390,9 +503,9 @@ def calibration():
 
 @app.post("/api/collect")
 def collect():
-    home, device = request_home_context()
-    if not home:
-        return jsonify({"error": "Đăng nhập hoặc cung cấp Bearer device token"}), 401
+    home, device, error = require_mutation_context()
+    if error:
+        return error
     payload = request.get_json(force=True, silent=False) or {}
     wifi = payload.get("wifi")
     room_name = str(payload.get("room", "")).strip()
@@ -418,9 +531,9 @@ def collect():
 
 @app.post("/api/scan")
 def scan():
-    home, _device = request_home_context()
-    if not home:
-        return jsonify({"error": "Đăng nhập hoặc cung cấp Bearer device token"}), 401
+    home, _device, error = require_mutation_context()
+    if error:
+        return error
     progress = home_progress(home["id"])
     if not progress["localization_ready"]:
         return jsonify({"error": "CALIBRATION_REQUIRED", "calibration": progress}), 409
@@ -441,7 +554,7 @@ def scan():
 @app.post("/api/demo/scan")
 @login_required
 def demo_scan():
-    home, error = require_active_home()
+    home, error = require_owned_home()
     if error:
         return error
     payload = request.get_json(silent=True) or {}
@@ -461,9 +574,9 @@ def demo_scan():
 
 @app.post("/api/sensor")
 def sensor_update():
-    home, _device = request_home_context()
-    if not home:
-        return jsonify({"error": "Đăng nhập hoặc cung cấp Bearer device token"}), 401
+    home, _device, error = require_mutation_context()
+    if error:
+        return error
     payload = request.get_json(force=True, silent=False) or {}
     acceleration = payload.get("acceleration")
     if not isinstance(acceleration, dict):
@@ -556,7 +669,7 @@ def metrics():
 @app.get("/api/export/scans.csv")
 @login_required
 def export_scans():
-    home, error = require_active_home()
+    home, error = require_owned_home()
     if error:
         return error
     scans = db.export_scans(home["id"])
@@ -593,7 +706,7 @@ def run_training(home_id: int) -> None:
 @app.post("/api/training/start")
 @login_required
 def start_training():
-    home, error = require_active_home()
+    home, error = require_owned_home()
     if error:
         return error
     progress = home_progress(home["id"])
@@ -618,7 +731,7 @@ def training_status():
 @app.post("/api/reset")
 @login_required
 def reset():
-    home, error = require_active_home()
+    home, error = require_owned_home()
     if error:
         return error
     with lock:
@@ -634,10 +747,39 @@ def reset():
 
 
 if __name__ == "__main__":
+    import atexit
+
     server_cfg = cfg["server"]
+    host = server_cfg["host"]
+    port = int(server_cfg["port"])
     cert = os.getenv("SMART_HOME_SSL_CERT")
     key = os.getenv("SMART_HOME_SSL_KEY")
+    mdns_info = None
+
+    if server_cfg.get("mdns_enabled", True) and not (cert and key):
+        # Quảng bá "_antam._tcp." trên WiFi nhà để Android (NSD) tự tìm ra
+        # địa chỉ máy chủ, không cần người dùng gõ IP.
+        try:
+            from zeroconf import ServiceInfo, Zeroconf
+
+            zeroconf = Zeroconf()
+            mdns_info = ServiceInfo(
+                "_antam._tcp.local.",
+                "An Tam Home Server._antam._tcp.local.",
+                port=port,
+                properties={"path": "/", "app": "antam", "api": "v1"},
+                server="antam-home.local.",
+            )
+            zeroconf.register_service(mdns_info)
+            atexit.register(lambda: (zeroconf.unregister_service(mdns_info), zeroconf.close()))
+            print(f"[mDNS] Dang quang ba _antam._tcp tren cong {port} — app dien thoai se tu tim may chu.")
+        except ImportError:
+            print("[mDNS] Chua cai zeroconf — pip install zeroconf de app tu tim may chu.")
+        except Exception as exc:  # zeroconf is a convenience, never fatal.
+            mdns_info = None
+            print(f"[mDNS] Khong quang ba duoc: {exc}")
+
     app.run(
-        host=server_cfg["host"], port=int(server_cfg["port"]), debug=False,
+        host=host, port=port, debug=False,
         ssl_context=(cert, key) if cert and key else None,
     )

@@ -81,24 +81,47 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- ═══ Card: kết nối backend ═══ -->
+        <!-- ═══ Card: kết nối máy chủ (NSD tự tìm + đăng nhập) ═══ -->
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical" android:background="@drawable/bg_card"
             android:padding="18dp" android:layout_marginTop="16dp">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="BACKEND" android:textColor="@color/text_muted" android:textSize="11sp"
+                android:text="MÁY CHỦ VÀ TÀI KHOẢN" android:textColor="@color/text_muted" android:textSize="11sp"
                 android:letterSpacing="0.15" />
+            <TextView android:id="@+id/discoveryStatus" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="10dp" android:text="Đang dò tìm máy chủ trên WiFi…" android:textColor="@color/text_secondary" android:textSize="12sp" />
+            <Button android:id="@+id/discoverButton" android:layout_width="match_parent" android:layout_height="46dp"
+                android:background="@drawable/btn_secondary" android:layout_marginTop="8dp"
+                android:text="TÌM LẠI MÁY CHỦ" android:textColor="@color/text_primary"
+                android:textSize="13sp" android:textStyle="bold" android:stateListAnimator="@null" />
             <EditText android:id="@+id/backendUrl" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:background="@drawable/bg_input" android:paddingStart="14dp" android:paddingEnd="14dp"
                 android:paddingTop="12dp" android:paddingBottom="12dp" android:layout_marginTop="10dp"
-                android:hint="http://192.168.1.10:5000" android:textColorHint="@color/text_muted"
+                android:hint="NSD tự tìm — hoặc nhập http://IP:5000" android:textColorHint="@color/text_muted"
                 android:textColor="@color/text_primary" android:textSize="14sp" android:inputType="textUri"
                 android:maxLines="1"
                 android:autofillHints="url" />
+            <EditText android:id="@+id/loginEmail" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:background="@drawable/bg_input" android:paddingStart="14dp" android:paddingEnd="14dp"
+                android:paddingTop="12dp" android:paddingBottom="12dp" android:layout_marginTop="10dp"
+                android:hint="Email đăng nhập" android:textColorHint="@color/text_muted"
+                android:textColor="@color/text_primary" android:textSize="14sp" android:inputType="textEmailAddress"
+                android:maxLines="1" android:autofillHints="emailAddress" />
+            <EditText android:id="@+id/loginPassword" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:background="@drawable/bg_input" android:paddingStart="14dp" android:paddingEnd="14dp"
+                android:paddingTop="12dp" android:paddingBottom="12dp" android:layout_marginTop="10dp"
+                android:hint="Mật khẩu" android:textColorHint="@color/text_muted"
+                android:textColor="@color/text_primary" android:textSize="14sp" android:inputType="textPassword"
+                android:imeOptions="actionDone"
+                android:maxLines="1" android:importantForAutofill="no" />
+            <Button android:id="@+id/loginButton" android:layout_width="match_parent" android:layout_height="48dp"
+                android:background="@drawable/btn_primary" android:layout_marginTop="10dp"
+                android:text="ĐĂNG NHẬP TÀI KHOẢN" android:textColor="#06121F"
+                android:textSize="14sp" android:textStyle="bold" android:stateListAnimator="@null" />
             <EditText android:id="@+id/collectorToken" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:background="@drawable/bg_input" android:paddingStart="14dp" android:paddingEnd="14dp"
                 android:paddingTop="12dp" android:paddingBottom="12dp" android:layout_marginTop="10dp"
-                android:hint="Mã ghép nối (ath_...)" android:textColorHint="@color/text_muted"
+                android:hint="Mã ghép nối (ath_...) — tùy chọn khi đã đăng nhập" android:textColorHint="@color/text_muted"
                 android:textColor="@color/text_primary" android:textSize="14sp"
                 android:inputType="textPassword" android:maxLines="1"
                 android:importantForAutofill="no" />
@@ -107,6 +130,32 @@
                 android:paddingTop="12dp" android:paddingBottom="12dp" android:layout_marginTop="10dp"
                 android:hint="Session ID (S01)" android:textColorHint="@color/text_muted"
                 android:textColor="@color/text_primary" android:textSize="14sp" android:maxLines="1" />
+        </LinearLayout>
+
+        <!-- ═══ Card: chia sẻ / tham gia nhà bằng mã 6 số ═══ -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:background="@drawable/bg_card"
+            android:padding="18dp" android:layout_marginTop="14dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="CHIA SẺ NHÀ (MÃ 6 SỐ)" android:textColor="@color/text_muted" android:textSize="11sp"
+                android:letterSpacing="0.15" />
+            <EditText android:id="@+id/joinCode" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:background="@drawable/bg_input" android:paddingStart="14dp" android:paddingEnd="14dp"
+                android:paddingTop="12dp" android:paddingBottom="12dp" android:layout_marginTop="10dp"
+                android:hint="Nhập mã 6 số để tham gia nhà" android:textColorHint="@color/text_muted"
+                android:textColor="@color/text_primary" android:textSize="14sp"
+                android:inputType="number" android:maxLength="6" android:maxLines="1" />
+            <Button android:id="@+id/joinButton" android:layout_width="match_parent" android:layout_height="48dp"
+                android:background="@drawable/btn_primary" android:layout_marginTop="10dp"
+                android:text="THAM GIA NHÀ" android:textColor="#06121F"
+                android:textSize="14sp" android:textStyle="bold" android:stateListAnimator="@null" />
+            <Button android:id="@+id/shareButton" android:layout_width="match_parent" android:layout_height="48dp"
+                android:background="@drawable/btn_secondary" android:layout_marginTop="8dp"
+                android:text="TẠO MÃ CHIA SẺ (CHỦ NHÀ)" android:textColor="@color/text_primary"
+                android:textSize="13sp" android:textStyle="bold" android:stateListAnimator="@null" />
+            <TextView android:id="@+id/shareCodeText" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" android:textIsSelectable="true"
+                android:text="" android:textColor="@color/primary" android:textSize="15sp" android:textStyle="bold" />
         </LinearLayout>
 
         <!-- ═══ Card: thu thập dữ liệu ═══ -->

@@ -92,8 +92,9 @@ async function loadApplication() {
 }
 
 function renderHomes() {
-  $('homeSelect').innerHTML=state.me.homes.map(home=>`<option value="${home.id}" ${state.me.active_home?.id===home.id?'selected':''}>${escapeHTML(home.name)}</option>`).join('');
+  $('homeSelect').innerHTML=state.me.homes.map(home=>`<option value="${home.id}" ${state.me.active_home?.id===home.id?'selected':''}>${escapeHTML(home.name)}${home.role==='member'?' (được chia sẻ)':''}</option>`).join('');
   $('homeTitle').textContent=state.me.active_home?.name||'An Tâm Home';
+  document.body.classList.toggle('member-mode',state.me.active_home?.role==='member');
 }
 
 async function loadHome() {
@@ -178,7 +179,51 @@ $('loginTab').addEventListener('click',()=>selectAuthTab('login'));$('registerTa
 $('loginForm').addEventListener('submit',event=>{event.preventDefault();submitAuth(event.currentTarget,'/api/auth/login');});$('registerForm').addEventListener('submit',event=>{event.preventDefault();submitAuth(event.currentTarget,'/api/auth/register');});
 $('logoutButton').addEventListener('click',async()=>{await api('/api/auth/logout',{method:'POST'});location.reload();});
 $('homeSelect').addEventListener('change',async event=>{await api(`/api/homes/${event.target.value}/select`,{method:'POST'});state.me=await api('/api/auth/me');renderHomes();await loadHome();});
-$('addHomeButton').addEventListener('click',()=>$('homeDialog').showModal());document.querySelectorAll('[data-close]').forEach(button=>button.addEventListener('click',()=>$(button.dataset.close).close()));
+$('addHomeButton').addEventListener('click',()=>$('homeDialog').showModal());
+$('shareButton').addEventListener('click',async()=>{
+  $('joinMessage').textContent='';$('shareMeta').textContent='';$('shareCode').value='';
+  const home=state.me.active_home;
+  const isOwner=home?.role!=='member';
+  $('ownerShareSection').hidden=!isOwner;
+  if(isOwner&&home){
+    try{
+      const {share,ttl_hours}=await api(`/api/homes/${home.id}/share`);
+      $('shareCode').value=share?.code||'';
+      $('shareMeta').textContent=share?`Mã còn hiệu lực ${Math.round((share.expires_at-Date.now()/1000)/3600)} giờ trên tổng ${ttl_hours} giờ.`:'Chưa có mã — bấm “Tạo mã mới”.';
+      renderMembers(await api(`/api/homes/${home.id}/members`));
+    }catch(error){$('shareMeta').textContent=`Không tải được mã chia sẻ: ${error.message}`;}
+  }
+  $('shareDialog').showModal();
+});
+function renderMembers(members){
+  $('memberList').innerHTML=members.map(member=>`<div class="entity-row"><div><strong>${escapeHTML(member.display_name)}</strong><small>${escapeHTML(member.email)} • tham gia ${fmtTime(member.joined_at)}</small></div><button type="button" data-kick-member="${member.user_id}" aria-label="Xóa quyền xem của ${escapeHTML(member.display_name)}">Xóa quyền</button></div>`).join('')||'<div class="empty-state">Chưa có thành viên nào tham gia.</div>';
+  document.querySelectorAll('[data-kick-member]').forEach(button=>button.addEventListener('click',async()=>{
+    if(!confirm('Xóa quyền xem của thành viên này? Điều này không xóa dữ liệu nhà.'))return;
+    try{renderMembers(await api(`/api/homes/${state.me.active_home.id}/members/${button.dataset.kickMember}`,{method:'DELETE'}));}catch(error){alert(error.message);}
+  }));
+}
+$('rotateShareButton').addEventListener('click',async()=>{
+  setButtonBusy($('rotateShareButton'),true,'Đang tạo…');
+  try{
+    const {share,ttl_hours}=await api(`/api/homes/${state.me.active_home.id}/share`,{method:'POST'});
+    $('shareCode').value=share.code;$('shareMeta').textContent=`Mã mới có hiệu lực ${ttl_hours} giờ. Mã cũ đã bị vô hiệu.`;
+  }catch(error){alert(error.message);}finally{setButtonBusy($('rotateShareButton'),false);}
+});
+$('revokeShareButton').addEventListener('click',async()=>{
+  if(!confirm('Thu hồi mã chia sẻ hiện tại? Người chưa nhập mã sẽ không thể tham gia.'))return;
+  try{await api(`/api/homes/${state.me.active_home.id}/share`,{method:'DELETE'});$('shareCode').value='';$('shareMeta').textContent='Đã thu hồi mã.';}catch(error){alert(error.message);}
+});
+$('copyShareCode').addEventListener('click',async()=>{const value=$('shareCode').value;if(!value)return;try{await navigator.clipboard.writeText(value);$('copyShareCode').textContent='Đã sao chép';setTimeout(()=>$('copyShareCode').textContent='Sao chép',1500);}catch{$('shareCode').select();document.execCommand('copy');}});
+$('joinForm').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const button=event.currentTarget.querySelector('[type="submit"]');setButtonBusy(button,true,'Đang tham gia…');
+  try{
+    await api('/api/homes/join',{method:'POST',body:JSON.stringify({code:$('joinCode').value.trim()})});
+    $('shareDialog').close();$('joinCode').value='';
+    state.me=await api('/api/auth/me');renderHomes();await loadHome();
+  }catch(error){$('joinMessage').textContent=error.message;}
+  finally{setButtonBusy(button,false);}
+});document.querySelectorAll('[data-close]').forEach(button=>button.addEventListener('click',()=>$(button.dataset.close).close()));
 $('homeForm').addEventListener('submit',async event=>{event.preventDefault();const button=event.currentTarget.querySelector('[type="submit"]');setButtonBusy(button,true);try{await api('/api/homes',{method:'POST',body:JSON.stringify({name:$('newHomeName').value})});$('homeDialog').close();$('newHomeName').value='';state.me=await api('/api/auth/me');renderHomes();await loadHome();}finally{setButtonBusy(button,false);}});
 $('roomForm').addEventListener('submit',async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button');setButtonBusy(button,true);try{await api('/api/rooms',{method:'POST',body:JSON.stringify({name:$('newRoomName').value,max_dwell_minutes:Number($('newRoomDwell').value)})});$('newRoomName').value='';await loadHome();}catch(error){alert(error.message)}finally{setButtonBusy(button,false);}});
 $('deviceForm').addEventListener('submit',async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button');setButtonBusy(button,true);try{const result=await api('/api/devices',{method:'POST',body:JSON.stringify({name:$('deviceName').value,platform:'android'})});$('deviceToken').value=result.token;$('tokenReveal').hidden=false;state.devices=await api('/api/devices');renderDevices();renderCalibration(state.calibration);}finally{setButtonBusy(button,false);}});

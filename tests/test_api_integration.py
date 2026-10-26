@@ -242,3 +242,127 @@ def test_sensor_endpoint_rejects_non_finite_samples(client):
     status = client.get("/api/sensor/status")
     assert status.status_code == 200
     assert status.get_json() == {"state": "NO_DATA"}
+
+
+def create_share(client, home_id):
+    response = client.post(f"/api/homes/{home_id}/share")
+    assert response.status_code == 201, response.get_data(as_text=True)
+    return response.get_json()["share"]["code"]
+
+
+def login_as(client, email, password="TEST_PASSWORD_PLACEHOLDER"):
+    assert client.post("/api/auth/login", json={"email": email, "password": password}).status_code == 200
+
+
+def test_share_code_lets_member_view_but_not_write(client):
+    register(client, "owner@example.com", "Nhà Ông Bà")
+    owner_home = client.get("/api/auth/me").get_json()["active_home"]["id"]
+    create_rooms(client, ["Phòng ngủ", "Phòng khách"])
+    code = create_share(client, owner_home)
+
+    # Mã gồm 6 chữ số và chủ nhà đọc lại được mã đang còn hiệu lực.
+    assert code.isdigit() and len(code) == 6
+    assert client.get(f"/api/homes/{owner_home}/share").get_json()["share"]["code"] == code
+
+    client.post("/api/auth/logout")
+    register(client, "friend@example.com", "Nhà Của Friend")
+    joined = client.post("/api/homes/join", json={"code": code})
+    assert joined.status_code == 200, joined.get_data(as_text=True)
+    joined_home = joined.get_json()["joined_home"]
+    assert joined_home["id"] == owner_home
+    assert joined_home["role"] == "member"
+
+    me = client.get("/api/auth/me").get_json()
+    assert [h["role"] for h in me["homes"] if h["id"] == owner_home] == ["member"]
+    client.post(f"/api/homes/{owner_home}/select")
+
+    # Thành viên được xem dữ liệu chung.
+    assert client.get("/api/status").status_code == 200
+    assert client.get("/api/history").status_code == 200
+    assert client.get("/api/alerts").status_code == 200
+    assert client.get("/api/rooms").get_json()[0]["name"] == "Phòng ngủ"
+
+    # Thành viên không được ghi: phòng, thu thập, demo, train, xuất CSV.
+    assert client.post("/api/rooms", json={"name": "Phòng mới"}).status_code == 403
+    assert client.post("/api/collect", json={"wifi": {"AP1": -50}, "room": "Phòng ngủ", "session_id": "S01"}).status_code == 403
+    assert client.post("/api/demo/scan", json={}).status_code == 403
+    assert client.post("/api/training/start").status_code == 403
+    assert client.get("/api/export/scans.csv").status_code == 403
+
+    # Tạo mã chia sẻ chỉ dành cho chủ nhà.
+    assert client.post(f"/api/homes/{owner_home}/share").status_code == 403
+
+    client.post("/api/auth/logout")
+    login_as(client, "owner@example.com")
+    members = client.get(f"/api/homes/{owner_home}/members").get_json()
+    assert [m["email"] for m in members] == ["friend@example.com"]
+
+
+def test_invalid_expired_and_rotated_share_codes(client):
+    register(client, "root@example.com", "Nhà Gốc")
+    home_id = client.get("/api/auth/me").get_json()["active_home"]["id"]
+    first_code = create_share(client, home_id)
+
+    client.post("/api/auth/logout")
+    register(client, "guest@example.com", "Nhà Khách")
+
+    assert client.post("/api/homes/join", json={"code": "abc123"}).status_code == 400
+    assert client.post("/api/homes/join", json={"code": "000000"}).status_code == 404
+
+    # Chủ nhà tạo mã mới → mã cũ bị vô hiệu.
+    client.post("/api/auth/logout")
+    login_as(client, "root@example.com")
+    create_share(client, home_id)
+    client.post("/api/auth/logout")
+    login_as(client, "guest@example.com")
+    assert client.post("/api/homes/join", json={"code": first_code}).status_code == 404
+
+    # Thu hồi mã → mã mới nhất cũng không dùng được nữa.
+    client.post("/api/auth/logout")
+    login_as(client, "root@example.com")
+    assert client.delete(f"/api/homes/{home_id}/share").get_json()["ok"] is True
+    assert client.get(f"/api/homes/{home_id}/share").get_json()["share"] is None
+    last_code = create_share(client, home_id)
+    assert client.delete(f"/api/homes/{home_id}/share").get_json()["ok"] is True
+    client.post("/api/auth/logout"); login_as(client, "guest@example.com")
+    assert client.post("/api/homes/join", json={"code": last_code}).status_code == 404
+
+
+def test_serial_share_code_expiry(client, monkeypatch):
+    register(client, "exp@example.com", "Nhá Hạn")
+    home_id = client.get("/api/auth/me").get_json()["active_home"]["id"]
+    create_share(client, home_id)
+
+    import time as time_module
+    real_time = time_module.time
+    monkeypatch.setattr(appmod.time, "time", lambda: real_time() + 25 * 3600)
+
+    client.post("/api/auth/logout")
+    register(client, "late@example.com", "Nhà Muộn")
+    assert client.post("/api/homes/join", json={"code": "111111"}).status_code == 404
+
+    # Mã hết hạn 24 giờ khiến share hiển thị là trống.
+    client.post("/api/auth/logout"); login_as(client, "exp@example.com")
+    assert client.get(f"/api/homes/{home_id}/share").get_json()["share"] is None
+
+
+def test_owner_can_remove_member(client):
+    register(client, "keeper@example.com", "Nhà Gỡ")
+    home_id = client.get("/api/auth/me").get_json()["active_home"]["id"]
+    code = create_share(client, home_id)
+
+    client.post("/api/auth/logout")
+    register(client, "gone@example.com", "Nhà Biến Mất")
+    client.post("/api/homes/join", json={"code": code})
+    assert client.post(f"/api/homes/{home_id}/select").status_code == 200
+    assert client.get("/api/status").status_code == 200
+
+    client.post("/api/auth/logout")
+    login_as(client, "keeper@example.com")
+    victim_id = client.get(f"/api/homes/{home_id}/members").get_json()[0]["user_id"]
+    assert client.delete(f"/api/homes/{home_id}/members/{victim_id}").get_json()["ok"] is True
+
+    client.post("/api/auth/logout")
+    login_as(client, "gone@example.com")
+    assert client.post(f"/api/homes/{home_id}/select").status_code == 404
+    assert all(h["id"] != home_id for h in client.get("/api/auth/me").get_json()["homes"])

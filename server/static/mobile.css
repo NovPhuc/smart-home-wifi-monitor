@@ -1,5 +1,10 @@
+/* =============================================================================
+ * An Tâm Home — lớp cảm ứng / PWA (nút, hộp thoại, thanh dưới, safe-area)
+ * Sắp xếp lại từ bản cũ + chuyển động mở/đóng hộp thoại.
+ * ========================================================================== */
+
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --focus-ring: #ffffff;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
@@ -12,9 +17,8 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
-button, a {
-  touch-action: manipulation;
-}
+/* Trên cảm ứng, hover dính lại sau khi chạm — chỉ bật hover khi có chuột thật. */
+button, a { touch-action: manipulation; }
 
 button:focus-visible, a:focus-visible {
   outline: 3px solid var(--focus-ring);
@@ -32,17 +36,11 @@ button:focus-visible, a:focus-visible {
   color: #08111f;
   font-weight: 700;
   transform: translateY(-150%);
+  transition: transform var(--dur-base) var(--ease-out);
 }
+.skip-link:focus { transform: translateY(0); }
 
-.skip-link:focus {
-  transform: translateY(0);
-}
-
-.top-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+.top-actions { display: flex; align-items: center; gap: 10px; }
 
 .secondary-btn {
   min-height: 44px;
@@ -55,20 +53,16 @@ button:focus-visible, a:focus-visible {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  transition: filter var(--dur-fast) ease;
 }
 
-.primary-btn, .icon-btn, .room-tile {
-  min-height: 44px;
-}
+.primary-btn, .icon-btn, .room-tile { min-height: 44px; }
 
-button:disabled {
-  cursor: not-allowed;
-  opacity: .48;
-}
+button:disabled { cursor: not-allowed; opacity: .48; }
 
-button:active:not(:disabled), .room-tile:active:not(:disabled) {
-  filter: brightness(1.12);
-}
+/* Phản hồi khi nhấn nằm ở style.css (transform). Ở đây chỉ giữ phần
+   không gây dịch chuyển cho các nút phụ. */
+.primary-btn, .secondary-btn, .icon-btn { transition: filter var(--dur-fast) ease, transform var(--dur-fast) ease; }
 
 .icon-btn svg {
   width: 20px;
@@ -80,65 +74,19 @@ button:active:not(:disabled), .room-tile:active:not(:disabled) {
   stroke-width: 2;
 }
 
-.sensor-card p, .data-notice {
-  color: #a7b6c8;
-  font-size: 12px;
-  line-height: 1.6;
-}
+.sensor-card p, .data-notice { color: #a7b6c8; font-size: 12px; line-height: 1.6; }
+.sensor-card .primary-btn { width: 100%; margin: 8px 0 10px; }
+.sensor-card small { display: block; color: #93a6ba; font-size: 11px; line-height: 1.45; }
 
-.sensor-card .primary-btn {
-  width: 100%;
-  margin: 8px 0 10px;
-}
+.metrics-card { margin-top: 14px; }
 
-.sensor-card small {
-  display: block;
-  color: #93a6ba;
-  font-size: 11px;
-  line-height: 1.45;
-}
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.metric-grid > div { padding: 16px; border: 1px solid #293c53; border-radius: 12px; background: #14263a; }
+.metric-grid span, .metric-grid strong { display: block; }
+.metric-grid span { min-height: 32px; color: #a4b4c6; font-size: 12px; line-height: 1.35; }
+.metric-grid strong { margin-top: 8px; color: #61e8bd; font-size: 22px; }
 
-.metrics-card {
-  margin-top: 14px;
-}
-
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.metric-grid > div {
-  padding: 16px;
-  border: 1px solid #293c53;
-  border-radius: 12px;
-  background: #14263a;
-}
-
-.metric-grid span, .metric-grid strong {
-  display: block;
-}
-
-.metric-grid span {
-  min-height: 32px;
-  color: #a4b4c6;
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.metric-grid strong {
-  margin-top: 8px;
-  color: #61e8bd;
-  font-size: 22px;
-}
-
-.baseline-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 18px;
-}
-
+.baseline-list { display: grid; gap: 10px; margin-top: 18px; }
 .baseline-list > div {
   display: grid;
   grid-template-columns: 110px 1fr 64px;
@@ -147,24 +95,18 @@ button:active:not(:disabled), .room-tile:active:not(:disabled) {
   color: #b9c6d5;
   font-size: 12px;
 }
-
-.baseline-list > div > div {
-  height: 7px;
-  overflow: hidden;
-  border-radius: 99px;
-  background: #26394e;
-}
-
+.baseline-list > div > div { height: 7px; overflow: hidden; border-radius: 99px; background: #26394e; }
 .baseline-list i {
   display: block;
   height: 100%;
+  width: 100%;
   border-radius: inherit;
+  transform: scaleX(0);
+  transform-origin: left center;
   background: linear-gradient(90deg, #68a7ff, #61e8bd);
+  transition: transform 320ms var(--ease-out);
 }
-
-.baseline-list strong {
-  text-align: right;
-}
+.baseline-list strong { text-align: right; }
 
 .data-notice {
   margin: 18px 0 0;
@@ -174,6 +116,9 @@ button:active:not(:disabled), .room-tile:active:not(:disabled) {
   background: #2b281c;
 }
 
+/* ================================ HỘP THOẠI =============================== */
+/* Hộp thoại không neo vào nút bấm nào nên giữ tâm làm gốc biến đổi.
+   Mở và đóng đi cùng một đường để cảm giác đối xứng. */
 dialog {
   width: min(520px, calc(100% - 32px));
   padding: 0;
@@ -182,27 +127,34 @@ dialog {
   border-radius: 18px;
   background: #101d2d;
   color: #eef4fb;
+  opacity: 0;
+  transform: translateY(10px) scale(.97);
+  transition: opacity var(--dur-base) var(--ease-out),
+              transform var(--dur-base) var(--ease-out),
+              overlay var(--dur-base) allow-discrete,
+              display var(--dur-base) allow-discrete;
+}
+
+dialog[open] { opacity: 1; transform: translateY(0) scale(1); }
+
+@starting-style {
+  dialog[open] { opacity: 0; transform: translateY(10px) scale(.97); }
 }
 
 dialog::backdrop {
   background: rgba(3, 9, 17, .76);
   backdrop-filter: blur(5px);
+  opacity: 0;
+  transition: opacity var(--dur-base) ease,
+              overlay var(--dur-base) allow-discrete,
+              display var(--dur-base) allow-discrete;
 }
+dialog[open]::backdrop { opacity: 1; }
+@starting-style { dialog[open]::backdrop { opacity: 0; } }
 
-dialog form {
-  padding: 24px;
-}
-
-dialog h2 {
-  margin: 0 0 14px;
-  font-size: 22px;
-}
-
-dialog li, dialog p {
-  color: #b6c3d2;
-  font-size: 14px;
-  line-height: 1.6;
-}
+dialog form { padding: 24px; }
+dialog h2 { margin: 0 0 14px; font-size: 22px; }
+dialog li, dialog p { color: #b6c3d2; font-size: 14px; line-height: 1.6; }
 
 .dialog-close {
   float: right;
@@ -214,16 +166,18 @@ dialog li, dialog p {
   color: #f8fafc;
   font: inherit;
   cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .dialog-close:hover { background: #2a405a; }
 }
 
-.bottom-nav {
-  display: none;
-}
+/* ============================== THANH DƯỚI =============================== */
+.bottom-nav { display: none; }
 
+/* ================================ CẢM ỨNG ================================ */
 @media (max-width: 700px) {
-  body {
-    font-size: 16px;
-  }
+  body { font-size: 16px; }
 
   main {
     padding-top: calc(18px + var(--safe-top));
@@ -232,78 +186,29 @@ dialog li, dialog p {
     padding-left: calc(14px + var(--safe-left));
   }
 
-  .topbar {
-    gap: 14px;
-  }
+  .topbar { gap: 14px; }
+  .topbar h1 { font-size: 26px; line-height: 1.15; }
+  .subtitle { max-width: none; font-size: 15px; line-height: 1.5; }
+  .top-actions { align-items: flex-end; flex-direction: column-reverse; }
+  .secondary-btn { padding: 0 12px; white-space: nowrap; }
 
-  .topbar h1 {
-    font-size: 26px;
-    line-height: 1.15;
-  }
-
-  .subtitle {
-    max-width: none;
-    font-size: 15px;
-    line-height: 1.5;
-  }
-
-  .top-actions {
-    align-items: flex-end;
-    flex-direction: column-reverse;
-  }
-
-  .secondary-btn {
-    padding: 0 12px;
-    white-space: nowrap;
-  }
-
-  .card {
-    padding: 18px;
-    border-radius: 16px;
-  }
-
-  .card-head, .eyebrow {
-    font-size: 11px;
-  }
-
-  .location-main h2 {
-    font-size: 28px;
-  }
+  .card { padding: 18px; border-radius: 16px; }
+  .card-head, .eyebrow { font-size: 11px; }
+  .location-main h2 { font-size: 28px; }
 
   .location-main p, .activity-row strong, .stat span,
   .demo-card p, .sensor-card p, .data-notice,
-  .timeline-item strong, .room-tile span {
-    font-size: 14px;
-  }
+  .timeline-item strong, .room-tile span { font-size: 14px; }
 
   .activity-row small, .demo-card small, .timeline-item time,
   .timeline-item span, .room-tile small, .model-state, .count,
-  #historyCount, .probability {
-    font-size: 11px;
-  }
+  #historyCount, .probability { font-size: 11px; }
 
-  .side-column {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .metric-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .metric-grid > div {
-    padding: 13px;
-  }
-
-  .metric-grid strong {
-    font-size: 19px;
-  }
-
-  .baseline-list > div {
-    grid-template-columns: 86px 1fr 56px;
-    gap: 8px;
-    font-size: 11px;
-  }
+  .side-column { display: grid; grid-template-columns: 1fr; }
+  .metric-grid { grid-template-columns: 1fr 1fr; }
+  .metric-grid > div { padding: 13px; }
+  .metric-grid strong { font-size: 19px; }
+  .baseline-list > div { grid-template-columns: 86px 1fr 56px; gap: 8px; font-size: 11px; }
 
   .bottom-nav {
     position: fixed;
@@ -330,50 +235,33 @@ dialog li, dialog p {
     font-size: 11px;
     font-weight: 700;
     text-decoration: none;
+    transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
   }
 
-  .bottom-nav a:active, .bottom-nav a:focus-visible {
-    background: #1c344a;
-    color: #61e8bd;
-  }
+  .bottom-nav a:active, .bottom-nav a:focus-visible { background: #1c344a; color: #61e8bd; }
 
-  footer {
-    padding-bottom: 12px;
-    font-size: 11px;
-    line-height: 1.5;
-  }
+  footer { padding-bottom: 12px; font-size: 11px; line-height: 1.5; }
 }
 
 @media (max-width: 430px) {
-  .topbar {
-    display: block;
-  }
-
-  .top-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    margin-top: 14px;
-  }
-
-  .live-pill {
-    min-height: 44px;
-    justify-content: center;
-  }
-
-  .live-pill span {
-    display: inline;
-  }
-
-  .floorplan {
-    grid-template-rows: 120px 120px;
-  }
+  .topbar { display: block; }
+  .top-actions { display: grid; grid-template-columns: 1fr 1fr; margin-top: 14px; }
+  .live-pill { min-height: 44px; justify-content: center; }
+  .live-pill span { display: inline; }
+  .floorplan { grid-template-rows: 120px 120px; }
 }
 
+/* ============================ GIẢM CHUYỂN ĐỘNG =========================== */
+/* Giữ thay đổi màu (vẫn đọc được trạng thái), bỏ mọi dịch chuyển vị trí.
+   animation-delay phải về 0, nếu không phần tử vẫn nằm ở trạng thái đầu
+   (opacity 0) suốt thời gian trễ. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
-    scroll-behavior: auto !important;
     animation-duration: .01ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }

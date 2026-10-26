@@ -67,3 +67,20 @@ Căn cứ đánh giá: `De_cuong_chi_tiet_CNTT-KLCN-336.docx` (bản trích xu�
 
 ## Vị trí kết thúc phiên
 5/5 giai đoạn hoàn thành. Bài toán "tối ưu + sửa lỗi + báo cáo đối chiếu đề cương trên dữ liệu mô phỏng" đã đóng; bước kế tiếp bắt buộc cần **thiết bị/thu thập thực tế** (ngoài phạm vi phần mềm).
+
+## Phiên 4 (2026-10-23): chia sẻ nhà + tự tìm máy chủ
+Yêu cầu: nhiều tài khoản theo dõi 1 nhà qua mã 6 số; app điện thoại tự tìm IP máy chủ qua tài khoản, không gõ IP.
+
+Đã làm (tất cả đã chạy thật, pytest 47/47 + assembleDebug BUILD SUCCESSFUL):
+- `src/smarthome/storage.py`: thêm bảng `home_shares` + `home_members`; `list_homes`/`get_home` tính cả nhà được chia sẻ (role owner/member); hàm create_share_code (rotate, TTL 24h), active_share, revoke_share_code, join_home_by_code (idempotent), list/remove_member.
+- `server/app.py`: helper `require_owned_home()` + `require_mutation_context()` — thành viên "chỉ xem" (status/history/alerts/config/metrics/rooms GET), mọi ghi (phòng, thiết bị, collect, scan, sensor, demo, train, reset, export) về owner; endpoint mới GET/POST/DELETE `/api/homes/<id>/share`, GET/DELETE `/api/homes/<id>/members[/<uid>]`, POST `/api/homes/join`; login trả về user+homes+active_home.
+- Quảng bá mDNS `_antam._tcp` khi chạy `server/app.py` (zeroconf; MATN_ASCII do console). Xác nhận chạy thật: "Dang quang ba _antam._tcp tren cong 5000".
+- Web: nút "Chia sẻ / tham gia" (dialog shareDialog: nhập mã tham gia; tạo/rotate/thu hồi mã + danh sách thành viên); member-mode ẩn khu quản trị (account.css).
+- Android `MainActivity.kt` + `activity_main.xml`: NSD dò `_antam._tcp.` tự điền URL máy chủ; đăng nhập cookie (java.net.CookieManager, khôi phục phiên từ SharedPreferences); tham gia nhà bằng mã; chủ nhà tạo mã chia sẻ ngay trên app; token ghép nối trở thành tùy chọn.
+- 4 test API mới (share-flow quyền member, mã không hợp lệ/hết hạn/rotate, mã hết hạn theo thời gian, gỡ thành viên) → 43 → 47 test, tất cả pass.
+- Sửa môi trường build (máy này): `local.properties` sdk.dir → `E:\Android`; `gradle.properties` org.gradle.java.home → `C:/Program Files/Android/Android Studio/jbr`; thiếu import `java.net.CookieHandler` trong MainActivity.kt (lỗi code thật, đã sửa).
+
+Cảnh báo còn lại:
+- `resolveService`/`NsdServiceInfo.host`/`WifiManager.startScan` deprecated (chỉ warning, hoạt động tới API 34; migrate khi cần).
+- Session cookie khôi phục theo SECRET_KEY của server; đổi key → app phải đăng nhập lại.
+- Mã chia sẻ 6 số không có rate-limit thu thử (khoảng không gian 10^6, TTL 24h) — chấp nhận được cho nội bộ gia đình; cần lockout nếu mở rộng.

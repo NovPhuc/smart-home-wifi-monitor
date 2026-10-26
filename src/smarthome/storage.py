@@ -114,6 +114,22 @@ CREATE TABLE IF NOT EXISTS sensor_samples (
     possible_impact INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS home_shares (
+    code TEXT PRIMARY KEY,
+    home_id INTEGER NOT NULL REFERENCES homes(id) ON DELETE CASCADE,
+    created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at REAL NOT NULL,
+    expires_at REAL NOT NULL,
+    revoked_at REAL
+);
+
+CREATE TABLE IF NOT EXISTS home_members (
+    home_id INTEGER NOT NULL REFERENCES homes(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at REAL NOT NULL,
+    PRIMARY KEY (home_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     home_id INTEGER NOT NULL REFERENCES homes(id) ON DELETE CASCADE,
@@ -124,6 +140,8 @@ CREATE TABLE IF NOT EXISTS alerts (
     reasons_json TEXT NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS idx_home_members_user ON home_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_home_shares_home ON home_shares(home_id);
 CREATE INDEX IF NOT EXISTS idx_wifi_scans_home_room ON wifi_scans(home_id, room_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_predictions_home_time ON predictions(home_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_alerts_home_time ON alerts(home_id, timestamp DESC);
@@ -235,15 +253,130 @@ class SmartHomeDatabase:
     def list_homes(self, user_id: int) -> list[dict]:
         with self.connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM homes WHERE user_id=? ORDER BY created_at", (user_id,)
+                """
+                SELECT h.*, 'owner' AS role FROM homes h WHERE h.user_id=?
+                UNION
+                SELECT h.*, 'member' AS role FROM homes h
+                JOIN home_members m ON m.home_id=h.id WHERE m.user_id=?
+                ORDER BY created_at
+                """,
+                (user_id, user_id),
             ).fetchall()
             return [dict(row) for row in rows]
 
     def get_home(self, user_id: int, home_id: int) -> dict | None:
         with self.connect() as connection:
             return self._dict(connection.execute(
+                """
+                SELECT * FROM homes WHERE id=? AND (
+                    user_id=? OR EXISTS(SELECT 1 FROM home_members WHERE home_id=homes.id AND user_id=?)
+                )
+                """,
+                (home_id, user_id, user_id),
+            ).fetchone())
+
+    def get_owned_home(self, user_id: int, home_id: int) -> dict | None:
+        with self.connect() as connection:
+            return self._dict(connection.execute(
                 "SELECT * FROM homes WHERE id=? AND user_id=?", (home_id, user_id)
             ).fetchone())
+
+    def is_home_owner(self, home_id: int, user_id: int) -> bool:
+        with self.connect() as connection:
+            return connection.execute(
+                "SELECT 1 FROM homes WHERE id=? AND user_id=?", (home_id, user_id)
+            ).fetchone() is not None
+
+    @staticmethod
+    def generate_share_code() -> str:
+        return "".join(secrets.choice("0123456789") for _ in range(6))
+
+    def create_share_code(self, home_id: int, user_id: int, ttl_hours: float = 24.0) -> dict:
+        now = time.time()
+        expires_at = now + max(float(ttl_hours), 0.001) * 3600
+        with self.connect() as connection:
+            # Đúng một mã đang hoạt động cho mỗi nhà: mã cũ bị vô hiệu khi tạo mã mới.
+            connection.execute(
+                "UPDATE home_shares SET revoked_at=? WHERE home_id=? AND revoked_at IS NULL",
+                (now, home_id),
+            )
+            for _ in range(20):
+                code = self.generate_share_code()
+                try:
+                    connection.execute(
+                        "INSERT INTO home_shares(code,home_id,created_by,created_at,expires_at) VALUES(?,?,?,?,?)",
+                        (code, home_id, user_id, now, expires_at),
+                    )
+                    break
+                except sqlite3.IntegrityError:
+                    continue
+            else:
+                raise RuntimeError("Khong tao duoc ma chia sẻ, thử lại")
+            return {"code": code, "home_id": home_id, "expires_at": expires_at}
+
+    def active_share(self, home_id: int) -> dict | None:
+        now = time.time()
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT code, home_id, created_at, expires_at FROM home_shares
+                WHERE home_id=? AND revoked_at IS NULL AND expires_at>?
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (home_id, now),
+            ).fetchone()
+            return self._dict(row)
+
+    def revoke_share_code(self, home_id: int) -> bool:
+        with self.connect() as connection:
+            return connection.execute(
+                "UPDATE home_shares SET revoked_at=? WHERE home_id=? AND revoked_at IS NULL",
+                (time.time(), home_id),
+            ).rowcount > 0
+
+    def join_home_by_code(self, user_id: int, code: str) -> dict:
+        normalized = (code or "").strip()
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM home_shares
+                WHERE code=? AND revoked_at IS NULL AND expires_at>?
+                """,
+                (normalized, time.time()),
+            ).fetchone()
+            if not row:
+                raise LookupError("Mã chia sẻ không đúng hoặc đã hết hạn")
+            home = connection.execute(
+                "SELECT * FROM homes WHERE id=?", (row["home_id"],)
+            ).fetchone()
+            if not home or home["user_id"] == user_id:
+                # Người tự tham gia nhà chính mình coi như đã ở trong nhà.
+                if not home:
+                    raise LookupError("Mã chia sẻ không đúng hoặc đã hết hạn")
+                return {**dict(home), "role": "owner", "already_member": True}
+            connection.execute(
+                "INSERT OR IGNORE INTO home_members(home_id,user_id,joined_at) VALUES(?,?,?)",
+                (home["id"], user_id, time.time()),
+            )
+            return {**dict(home), "role": "member", "already_member": False}
+
+    def list_home_members(self, home_id: int) -> list[dict]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT hm.user_id, u.display_name, u.email, hm.joined_at
+                FROM home_members hm JOIN users u ON u.id=hm.user_id
+                WHERE hm.home_id=? ORDER BY hm.joined_at
+                """,
+                (home_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def remove_home_member(self, home_id: int, user_id: int) -> bool:
+        with self.connect() as connection:
+            return connection.execute(
+                "DELETE FROM home_members WHERE home_id=? AND user_id=?", (home_id, user_id)
+            ).rowcount == 1
 
     def rename_home(self, user_id: int, home_id: int, name: str) -> bool:
         with self.connect() as connection:

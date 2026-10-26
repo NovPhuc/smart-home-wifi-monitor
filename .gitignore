@@ -12,3 +12,4 @@ data/homes/
 models/homes/
 .env
 .ipynb_checkpoints/
+.playwright-cli/

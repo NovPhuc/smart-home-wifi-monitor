@@ -95,3 +95,7 @@ calibration:
 server:
   host: 0.0.0.0
   port: 5000
+  mdns_enabled: true  # quang ba _antam._tcp cho Android NSD tu tim may chu
+
+sharing:
+  code_ttl_hours: 24  # mã chia sẻ 6 số hết hạn sau 24 giờ

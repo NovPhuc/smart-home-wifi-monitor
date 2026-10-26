@@ -8,6 +8,8 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
@@ -19,7 +21,11 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import org.json.JSONObject
+import java.net.CookieHandler
+import java.net.CookieManager
+import java.net.CookiePolicy
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 import java.security.MessageDigest
 import kotlin.concurrent.thread
@@ -30,7 +36,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
     private lateinit var backendUrl: EditText
+    private lateinit var loginEmail: EditText
+    private lateinit var loginPassword: EditText
     private lateinit var collectorToken: EditText
+    private lateinit var joinCode: EditText
+    private lateinit var discoveryStatus: TextView
+    private lateinit var shareCodeText: TextView
     private lateinit var roomName: EditText
     private lateinit var sessionId: EditText
     private lateinit var orientationText: TextView
@@ -48,6 +59,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var autoCollectButton: Button
     private var autoScanJob: Thread? = null
     private var autoCollectJob: Thread? = null
+    private var nsdManager: NsdManager? = null
+    private var nsdDiscovering = false
+    @Volatile private var activeHomeId: Int = -1
+    @Volatile private var activeHomeRole: String = ""
 
     @Volatile
     private var autoRunning = false
@@ -61,6 +76,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         backendUrl = findViewById(R.id.backendUrl)
+        loginEmail = findViewById(R.id.loginEmail)
+        loginPassword = findViewById(R.id.loginPassword)
+        joinCode = findViewById(R.id.joinCode)
+        discoveryStatus = findViewById(R.id.discoveryStatus)
+        shareCodeText = findViewById(R.id.shareCodeText)
         collectorToken = findViewById(R.id.collectorToken)
         roomName = findViewById(R.id.roomName)
         sessionId = findViewById(R.id.sessionId)
@@ -80,12 +100,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val prefs = getSharedPreferences("wifi-collector", Context.MODE_PRIVATE)
         backendUrl.setText(prefs.getString("backendUrl", "http://192.168.1.10:5000"))
+        loginEmail.setText(prefs.getString("loginEmail", ""))
         collectorToken.setText(prefs.getString("collectorToken", ""))
         roomName.setText(prefs.getString("roomName", ""))
         sessionId.setText(prefs.getString("sessionId", "android-session"))
 
+        restoreSessionCookie()
         requestRuntimePermissions()
+        startServerDiscovery()
 
+        findViewById<Button>(R.id.discoverButton).setOnClickListener { startServerDiscovery() }
+        findViewById<Button>(R.id.loginButton).setOnClickListener { loginAndLoadHome() }
+        findViewById<Button>(R.id.joinButton).setOnClickListener { joinHomeByCode() }
+        findViewById<Button>(R.id.shareButton).setOnClickListener { createShareCode() }
         findViewById<Button>(R.id.collectButton).setOnClickListener { captureAndSend(collection = true) }
         autoCollectButton.setOnClickListener {
             if (autoCollectRunning) stopAutoCollect() else startAutoCollect()
@@ -217,10 +244,202 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val prefs = getSharedPreferences("wifi-collector", Context.MODE_PRIVATE)
         prefs.edit()
             .putString("backendUrl", backendUrl.text.toString().trim())
+            .putString("loginEmail", loginEmail.text.toString().trim())
             .putString("collectorToken", collectorToken.text.toString().trim())
             .putString("roomName", roomName.text.toString().trim())
             .putString("sessionId", sessionId.text.toString().trim())
             .apply()
+    }
+
+    // ─── NSD: tự tìm máy chủ trên WiFi nhà ──────────────────────
+
+    private var discoveryListener: NsdManager.DiscoveryListener? = null
+
+    private fun startServerDiscovery() {
+        val manager = nsdManager ?: (getSystemService(Context.NSD_SERVICE) as NsdManager).also { nsdManager = it }
+        val listener = discoveryListener ?: buildDiscoveryListener(manager).also { discoveryListener = it }
+        if (nsdDiscovering) return
+        nsdDiscovering = true
+        runOnUiThread {
+            discoveryStatus.text = "Đang dò tìm máy chủ An Tâm trên WiFi…"
+        }
+        try {
+            manager.discoverServices("_antam._tcp.", NsdManager.PROTOCOL_DNS_SD, listener)
+        } catch (e: Exception) {
+            nsdDiscovering = false
+            runOnUiThread { discoveryStatus.text = "Không dò được (${e.message}) — nhập URL thủ công." }
+        }
+    }
+
+    private fun buildDiscoveryListener(manager: NsdManager) = object : NsdManager.DiscoveryListener {
+        override fun onDiscoveryStarted(serviceType: String) {
+            runOnUiThread { discoveryStatus.text = "Đang quét WiFi của nhà… (máy chủ phải cùng mạng)" }
+        }
+
+        override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+            // Dừng quét và giải địa chỉ của máy chủ đầu tiên tìm thấy.
+            try { manager.stopServiceDiscovery(this) } catch (_: Exception) {}
+            nsdDiscovering = false
+            runOnUiThread { discoveryStatus.text = "Đã thấy máy chủ “${serviceInfo.serviceName}” — đang giải địa chỉ…" }
+            manager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
+                    runOnUiThread { discoveryStatus.text = "Không giải được địa chỉ máy chủ (mã $errorCode) — nhập tay." }
+                }
+
+                override fun onServiceResolved(info: NsdServiceInfo) {
+                    val host = info.host?.hostAddress?.ifEmpty { null }
+                        ?: info.serviceName
+                    val url = "http://$host:${info.port}"
+                    runOnUiThread {
+                        backendUrl.setText(url)
+                        discoveryStatus.text = "Máy chủ: $url"
+                        log("Tự tìm thấy máy chủ qua NSD: $url")
+                    }
+                }
+            })
+        }
+
+        override fun onServiceLost(serviceInfo: NsdServiceInfo) {
+            runOnUiThread { discoveryStatus.text = "Máy chủ mất khỏi mạng — thử “Tìm lại máy chủ”." }
+        }
+
+        override fun onDiscoveryStopped(serviceType: String) { nsdDiscovering = false }
+        override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+            nsdDiscovering = false
+            runOnUiThread { discoveryStatus.text = "Bật dò tìm thất bại (mã $errorCode) — nhập tay." }
+        }
+        override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) { nsdDiscovering = false }
+    }
+
+    // ─── Cookie phiên đăng nhập (không cần gõ IP lần sau) ────────
+
+    private fun restoreSessionCookie() {
+        val cookieHandler = CookieManager()
+        cookieHandler.setCookiePolicy(CookiePolicy.ACCEPT_ORIGINAL_SERVER)
+        CookieHandler.setDefault(cookieHandler)
+        val prefs = getSharedPreferences("wifi-collector", Context.MODE_PRIVATE)
+        val saved = prefs.getString("sessionCookie", null) ?: return
+        val savedUrl = prefs.getString("sessionUrl", null) ?: return
+        try {
+            cookieHandler.put(URI(savedUrl), mapOf("Cookie" to listOf("session=$saved")))
+            log("Khôi phục phiên đăng nhập đã lưu (không cần gõ IP và đăng nhập lại).")
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun persistSessionCookie() {
+        val cookieHandler = CookieHandler.getDefault() as? CookieManager ?: return
+        val baseUrl = backendUrl.text.toString().trim()
+        if (!baseUrl.startsWith("http")) return
+        val session = try {
+            cookieHandler.get(URI(baseUrl), emptyMap<String, List<String>>())
+                ?.get("Cookie")?.firstOrNull { it.startsWith("session=") }?.removePrefix("session=")
+        } catch (_: Exception) { null } ?: return
+        getSharedPreferences("wifi-collector", Context.MODE_PRIVATE).edit()
+            .putString("sessionCookie", session)
+            .putString("sessionUrl", baseUrl.trimEnd('/') + "/")
+            .apply()
+    }
+
+    // ─── Tài khoản + chia sẻ nhà theo mã 6 số ───────────────────
+
+    private fun loginAndLoadHome() {
+        savePrefs()
+        val email = loginEmail.text.toString().trim()
+        val password = loginPassword.text.toString()
+        if (!email.contains("@") || password.isEmpty()) {
+            log("Nhập email và mật khẩu để đăng nhập.")
+            return
+        }
+        val base = backendUrl.text.toString().trim().trimEnd('/')
+        thread {
+            val payload = JSONObject().apply { put("email", email); put("password", password) }
+            val (code, body) = httpPost("$base/api/auth/login", payload)
+            if (code !in 200..299) {
+                log("Đăng nhập thất bại (HTTP $code): ${body.take(120)}")
+                return@thread
+            }
+            persistSessionCookie()
+            val (meCode, meBody) = httpGet("$base/api/auth/me")
+            if (meCode !in 200..299) {
+                log("Đăng nhập được nhưng không đọc được nhà (HTTP $meCode).")
+                return@thread
+            }
+            val me = JSONObject(meBody)
+            val homes = me.optJSONArray("homes")
+            val active = me.optJSONObject("active_home")
+            activeHomeId = active?.optInt("id", -1) ?: -1
+            activeHomeRole = active?.optString("role", "") ?: ""
+            val shareHint = if (activeHomeRole == "member") " (được chia sẻ — chỉ xem)" else " (chủ nhà)"
+            runOnUiThread {
+                loginPassword.setText("")
+                log("Đã đăng nhập: ${me.optJSONObject("user")?.optString("display_name", "?")} • Nhà: " +
+                    "${active?.optString("name", "—")}$shareHint • ${homes?.length() ?: 0} nhà")
+            }
+        }
+    }
+
+    private fun joinHomeByCode() {
+        savePrefs()
+        val code = joinCode.text.toString().trim()
+        if (code.length != 6 || !code.all { it.isDigit() }) {
+            log("Mã chia sẻ phải gồm 6 chữ số.")
+            return
+        }
+        val base = backendUrl.text.toString().trim().trimEnd('/')
+        thread {
+            val payload = JSONObject().apply { put("code", code) }
+            val (code_, body) = httpPost("$base/api/homes/join", payload)
+            if (code_ == 401) {
+                log("Cần đăng nhập tài khoản trước khi tham gia nhà.")
+            } else if (code_ !in 200..299) {
+                log("Tham gia thất bại (HTTP $code_): ${body.take(140)}")
+            } else {
+                val joined = JSONObject(body).optJSONObject("joined_home")
+                runOnUiThread {
+                    joinCode.setText("")
+                    shareCodeText.text = ""
+                    log("Đã tham gia nhà “${joined?.optString("name", "?")}” (chỉ xem).")
+                }
+                switchActiveHome("$base", joined?.optInt("id", -1) ?: -1)
+            }
+        }
+    }
+
+    private fun switchActiveHome(base: String, homeId: Int) {
+        if (homeId <= 0) return
+        thread {
+            val (_, body) = httpPost("$base/api/homes/$homeId/select", JSONObject().apply {})
+            val me = if (body.isNotBlank()) JSONObject(body) else null
+            val ok = me?.has("active_home") == true
+            runOnUiThread { if (ok) log("Đã chuyển sang nhà được chia sẻ.") }
+        }
+    }
+
+    private fun createShareCode() {
+        savePrefs()
+        if (activeHomeId <= 0 || activeHomeRole == "member") {
+            log("Cần đăng nhập với tư cách chủ nhà trước khi tạo mã chia sẻ.")
+            return
+        }
+        val base = backendUrl.text.toString().trim().trimEnd('/')
+        runOnUiThread { shareCodeText.text = "Đang tạo mã…" }
+        thread {
+            val (_, body) = httpPost("$base/api/homes/$activeHomeId/share", JSONObject().apply {})
+            if (body.isBlank()) return@thread
+            val share = JSONObject(body).optJSONObject("share")
+            val code = share?.optString("code").orEmpty()
+            val expires = share?.optDouble("expires_at", 0.0) ?: 0.0
+            val hoursLeft = ((expires - System.currentTimeMillis() / 1000.0) / 3600).coerceAtLeast(0.0)
+            runOnUiThread {
+                if (code.isNotBlank()) {
+                    shareCodeText.text = "Mã chia sẻ: $code (còn ${hoursLeft.toInt()} giờ)"
+                    log("Nhập mã $code trên tài khoản người thân để họ theo dõi nhà này.")
+                } else {
+                    shareCodeText.text = "Không tạo được mã — kiểm tra quyền chủ nhà."
+                }
+            }
+        }
     }
 
     // ─── Permissions ────────────────────────────────────────────
@@ -243,8 +462,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun captureAndSend(collection: Boolean) {
         savePrefs()
-        if (collectorToken.text.toString().trim().isEmpty()) {
-            log("Thiếu mã ghép nối. Hãy tạo mã trên dashboard của căn nhà.")
+        val hasToken = collectorToken.text.toString().trim().isNotEmpty()
+        val hasSession = hasSessionCookie()
+        if (!hasToken && !hasSession) {
+            log("Cần mã ghép nối (ath_...) hoặc đăng nhập tài khoản trước.")
             return
         }
         if (!hasAllPermissions()) {
@@ -356,7 +577,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 conn.readTimeout = 6000
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                conn.setRequestProperty("Authorization", "Bearer $authToken")
+                if (authToken.isNotEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer $authToken")
+                }
                 conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
                 val code = conn.responseCode
                 val stream = if (code in 200..299) conn.inputStream else conn.errorStream
@@ -373,6 +596,59 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 log("Network error: ${e.message}")
             }
         }
+    }
+
+    private fun hasSessionCookie(): Boolean {
+        val cookieHandler = CookieHandler.getDefault() as? CookieManager ?: return false
+        val base = backendUrl.text.toString().trim()
+        if (!base.startsWith("http")) return false
+        return try {
+            cookieHandler.get(URI(base), emptyMap<String, List<String>>())
+                ?.get("Cookie")?.any { it.startsWith("session=") } == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** POST đồng bộ trả về Pair(mã HTTP, nội dung); gửi/nhận từ thread nền. */
+    private fun httpPost(target: String, payload: JSONObject): Pair<Int, String> {
+        var responseCode = 0
+        var responseBody = ""
+        try {
+            val conn = URL(target).openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+            responseCode = conn.responseCode
+            val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
+            responseBody = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            conn.disconnect()
+        } catch (e: Exception) {
+            responseBody = e.message ?: "network error"
+        }
+        return responseCode to responseBody
+    }
+
+    /** GET đồng bộ trả về Pair(mã HTTP, nội dung); gọi từ thread nền. */
+    private fun httpGet(target: String): Pair<Int, String> {
+        var responseCode = 0
+        var responseBody = ""
+        try {
+            val conn = URL(target).openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            responseCode = conn.responseCode
+            val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
+            responseBody = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            conn.disconnect()
+        } catch (e: Exception) {
+            responseBody = ""
+        }
+        return responseCode to responseBody
     }
 
     companion object {
