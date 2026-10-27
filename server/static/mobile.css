@@ -153,6 +153,12 @@ dialog[open]::backdrop { opacity: 1; }
 @starting-style { dialog[open]::backdrop { opacity: 0; } }
 
 dialog form { padding: 24px; }
+
+/* shareDialog không bọc nội dung trong <form> (form chỉ là phần nhập mã con),
+   nên dialog padding 0 làm nội dung dính sát viền — đo được 1px. Tự đặt đệm
+   cho riêng nó và hủy đệm kép của form con để form thẳng hàng với h3. */
+#shareDialog { padding: 24px; }
+#shareDialog form { padding: 0; }
 dialog h2 { margin: 0 0 14px; font-size: 22px; }
 dialog li, dialog p { color: #b6c3d2; font-size: 14px; line-height: 1.6; }
 

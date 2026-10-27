@@ -570,10 +570,15 @@ function renderStatus(status) {
     state.lastRoom = room;
     applyActiveRoom(room);
   }
-  setField($('room'), room ? roomLabel(room) : 'Chưa có dữ liệu', true);
+  // Ngay sau khi khởi động lại máy chủ, vài mẫu demo đầu tiên chưa đủ để model
+  // mẫu chốt phòng (đo thật 2026-10-27: phải chờ tới mẫu thứ 2-3 mới ra phòng).
+  // Nói rõ đang khởi động thay vì để "Chưa có dữ liệu" khô khan.
+  const warmingUp = !room && status.demo;
+  setField($('room'), room ? roomLabel(room) : warmingUp ? 'Đang lấy mẫu…' : 'Chưa có dữ liệu', true);
   setField($('roomMeta'), room
     ? `${status.demo ? 'Demo mẫu' : 'Model căn nhà'} • định vị mức phòng`
-    : 'Đang chờ fingerprint Wi-Fi…');
+    : warmingUp ? 'Model mẫu đang khởi động — chờ thêm vài mẫu tín hiệu…'
+      : 'Đang chờ fingerprint Wi-Fi…');
   setField($('confidence'), status.confidence != null ? `TIN CẬY ${(status.confidence * 100).toFixed(0)}%` : '—');
   setField($('dwell'), fmtDuration(status.dwell_minutes));
   setField($('score'), status.anomaly_score != null ? status.anomaly_score.toFixed(3) : '—');
@@ -845,9 +850,20 @@ async function sendMotion(acceleration) {
   }
 }
 
+/** Cảnh báo "không có gia tốc tuyến tính" chỉ nói một lần cho mỗi lần bật cảm biến. */
+let sensorAccelerationWarned = false;
+
 function onDeviceMotion(event) {
   const acceleration = event.acceleration;
-  if (!acceleration || acceleration.x == null || acceleration.y == null || acceleration.z == null) return;
+  if (!acceleration || acceleration.x == null || acceleration.y == null || acceleration.z == null) {
+    // app-v2.js có báo việc này, app-v3.js bỏ im lặng. Ghi lại ở MỖI sự kiện sẽ đè
+    // liên tục lên thông tin hữu ích trong #sensorMeta, nên chỉ nói một lần.
+    if (!sensorAccelerationWarned) {
+      sensorAccelerationWarned = true;
+      setField($('sensorMeta'), 'Thiết bị không cung cấp gia tốc tuyến tính.');
+    }
+    return;
+  }
   const magnitude = Math.hypot(acceleration.x, acceleration.y, acceleration.z);
   const now = performance.now();
   if (magnitude < 18 && now - lastSensorSentAt < 500) return;
@@ -886,6 +902,7 @@ async function toggleSensor() {
     }
     window.addEventListener('devicemotion', onDeviceMotion, { passive: true });
     sensorActive = true;
+    sensorAccelerationWarned = false;   // lần bật mới thì được nhắc lại một lần
     if (toggle) {
       setButtonLabel(toggle, 'Dừng cảm biến');
       toggle.setAttribute('aria-pressed', 'true');
@@ -931,7 +948,13 @@ function renderTrainingJob(job) {
   if (job.status === 'FAILED') {
     setField($('trainingTitle'), 'Huấn luyện thất bại');
     setField($('trainingMeta'), job.message || 'Kiểm tra dữ liệu và thử lại.');
-    if (button) button.disabled = false;
+    if (button) {
+      button.disabled = false;
+      // Đặt nhãn giống hệt renderCalibration để nhịp poll kế tiếp không đổi chữ
+      // ngược lại (trước đây nút còn kẹt chữ "Đang huấn luyện…" tới ~2 giây).
+      setButtonLabel(button, state.calibration?.model_status === 'READY'
+        ? 'Huấn luyện lại model' : 'Huấn luyện model căn nhà');
+    }
   }
 }
 

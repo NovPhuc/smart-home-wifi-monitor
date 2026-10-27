@@ -182,6 +182,9 @@ main { padding: 34px clamp(20px, 4vw, 54px) 28px; max-width: 1500px; width: 100%
 .badge.warning { background: #483a1d; color: var(--amber); }
 .badge.critical { background: #49232d; color: #ff9dad; }
 .badge.neutral { background: #253346; color: #a9b7c6; }
+/* Trạng thái COLLECTING (app.js sinh class "badge collecting" khi hệ thống
+   đang gom mẫu đầu tiên) — không có rule thì badge trong suốt trên nền card. */
+.badge.collecting { background: #1d3a52; color: var(--blue); }
 
 /* ---------------------------------------------------------------- an toàn -- */
 .safety-card { text-align: center; }

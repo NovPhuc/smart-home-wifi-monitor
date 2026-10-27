@@ -13,3 +13,4 @@ models/homes/
 .env
 .ipynb_checkpoints/
 .playwright-cli/
+*.egg-info/

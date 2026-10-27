@@ -84,3 +84,76 @@ Cảnh báo còn lại:
 - `resolveService`/`NsdServiceInfo.host`/`WifiManager.startScan` deprecated (chỉ warning, hoạt động tới API 34; migrate khi cần).
 - Session cookie khôi phục theo SECRET_KEY của server; đổi key → app phải đăng nhập lại.
 - Mã chia sẻ 6 số không có rate-limit thu thử (khoảng không gian 10^6, TTL 24h) — chấp nhận được cho nội bộ gia đình; cần lockout nếu mở rộng.
+
+## Phiên 5 (2026-10-26): soát UI sau lần gộp app.js (GLM 5.3 Flash / OpenCode)
+
+Thực hiện theo `docs/08_brief_glm_review.md`; báo cáo chi tiết tại `docs/09_glm_review.md`.
+
+Đã làm (kết quả chạy/đo thật):
+- Đối chiếu bản gộp `server/static/app.js` + 2 template + 3 CSS với `backup_original/ui_2026-10-24/`: **không mất ID, không mất chức năng**; shape dữ liệu UI↔server khớp toàn bộ endpoint (chi tiết trong 09).
+- Sửa lỗi 1 — shareDialog dính sát viền (nội dung ngoài `<form>` nên không được đệm, đo được 1px): thêm `#shareDialog { padding: 24px }` + `#shareDialog form { padding: 0 }` vào `mobile.css`. Lỗi kế thừa từ bản cũ, không phát sinh do lần gộp.
+- Sửa lỗi 2 — badge `COLLECTING` trong suốt (app.js sinh `badge collecting` nhưng CSS thiếu): thêm `.badge.collecting` vào `style.css`.
+- Kiểm chứng: `node --check app.js` OK; `pytest tests -q` với `PYTHONPATH=src` → **47/47 pass (29.50s)**; đo computed style fixture trước/sau cả hai fix.
+- Kiểm tra chính tả + encoding: 13 file UTF-8 hợp lệ, không BOM, không ký tự lỗi; chuỗi UI tiếng Việt không có lỗi chính tả.
+
+Phát hiện môi trường (chưa sửa, chờ agent chính):
+- `.venv` thiếu package `smarthome` → pytest thuần lỗi `ModuleNotFoundError`; tạm chạy bằng `PYTHONPATH=src`. Đề nghị `pip install -e .`.
+- `tests/__pycache__/` chứa `.pyc` cũ biên dịch từ bản dự án `1006` (path cũ nằm trong pyc) → nên xoá.
+- Flask không chạy ở `:5000` như brief ghi; comment `app.js:10` dẫn tới `docs/07_...` không tồn tại. Chi tiết trong `docs/09_glm_review.md`.
+
+## Phiên 6 (2026-10-27): hỗ trợ DeepSeek — kiểm chứng fix UI + sửa môi trường test (GLM 5.3 Flash)
+
+Tiếp tục theo kiến trúc 2 agent (`docs/10`): GLM làm việc tại worktree `wt-glm-flash` (nhánh `agent/glm-flash`).
+
+Đã làm (kết quả chạy thật):
+- Kiểm chứng 2 fix của DeepSeek trong `app.js` (khắc phục mục #5 và #6 trong docs/09): thông báo gia tốc tuyến tính 1 lần mỗi lần bật cảm biến (`sensorAccelerationWarned`), đặt lại nhãn nút train sau FAILED. Logic đúng, `node --check` OK.
+- Sửa môi trường test (mục #3 trong docs/09): `pip install -e .` vào `.venv` (import `smarthome` OK) + xoá `tests/__pycache__/` (pyc cũ trỏ sang bản 1006). Kết quả: pytest chạy **không cần PYTHONPATH: 47/47 pass (26.83s)**.
+- Cập nhật `docs/09_glm_review.md` bảng trạng thái xử lý đầy đủ 7 mục.
+- Đồng bộ toàn bộ trạng thái đã kiểm chứng (app.js + 2 CSS + docs/07, 09, 10 + PROGRESS.md + xoá app-v2/v3.js) vào nhánh `agent/glm-flash` để merge về chính khi duyệt.
+
+## Phiên 7 (2026-10-27): hạ tầng chạy 2 model trên 1 dự án (DeepSeek V4.1 Flash max)
+
+Yêu cầu: chạy **GLM 5.3 Flash (OpenCode)** và **DeepSeek V4.1 Flash suy luận max (DeepSeek Harness)**
+trên cùng một dự án, dùng chung NVIDIA NIM key với hạn mức 40 request/phút.
+Hướng dẫn cài đặt đầy đủ: `docs/10_chay_2_agent.md`.
+
+Đã làm (tất cả chạy thật):
+
+- Kiểm chứng proxy **có** ép DeepSeek chạy max: dựng upstream giả, body gửi tới NVIDIA chứa
+  `chat_template_kwargs {"thinking":true,"reasoning_effort":"max"}` và `reasoning_effort: "max"`,
+  còn request tới GLM **không** bị thêm gì. Mục `payload.override` trong `config.yaml` hoạt động
+  đúng trên CLIProxyAPI 8.0.33.
+- **Phát hiện quan trọng — lỗi phía NVIDIA, không phải cấu hình.** Gọi thẳng NVIDIA NIM (không qua
+  proxy): `minimaxai/minimax-m3.1-flash` trả lời sau 1,4 s; `z-ai/glm-5.3-flash` và
+  `deepseek-ai/deepseek-v4.1-flash` **không trả một byte nào** sau 150 s / 200 s (thử cả `stream: true`
+  và `stream: false`). Cả hai ID đều có thật trong `/v1/models` của chính key này (85 model).
+- Sửa `C:\cliproxy\nim-limiter.js` — bản gốc chỉ giới hạn số request nên **không xử lý được treo**,
+  mà alias "best" chỉ chuyển model khi upstream trả lỗi: cắt khi quá hạn byte đầu
+  (`--first-byte-timeout-sec=120`) trả 504; cách ly model vừa bị cắt (`--cooldown-sec=180`) trả 503
+  ngay cho request sau; cách ly tăng dần (`--cooldown-max-sec=3600`); `/healthz` thêm
+  `coolingDownSec`, `strikes`. **Đo thật:** `best` từ treo vô hạn → **6,1 s** (lần 1), **0,0 s** (lần 2).
+  Với NVIDIA thật: `deepseek`/`glm-flash` lỗi rõ ràng sau 120 s, `minimax` OK 0,9 s, `best` OK 1,0 s.
+- Thêm hai alias **`deep-first`** (DeepSeek → MiniMax) và **`glm-first`** (GLM → MiniMax) để mỗi agent
+  giữ đúng model chính mà vẫn có đường lui, và tự quay lại model chính khi NVIDIA sống lại.
+  Đo thật: lần 1 mất 124 s / 122 s, lần 2 chỉ còn 4,0 s / 1,4 s.
+- Sửa `start-cpa.ps1`: file thiếu **BOM UTF-8** nên **không parse được trên Windows PowerShell 5.1**
+  (mặc định của máy này) — chữ Việt bị đọc theo ANSI, lỗi `Unexpected token 'i'` tại dòng 82. Đã thêm
+  BOM: parse OK trên cả 5.1 và 7. Thêm tham số `-FirstByteTimeoutSec`, `-CooldownSec`, `-CooldownMaxSec`.
+  *Ghi chú:* công cụ soạn thảo dùng ở đây **xoá BOM** mỗi lần sửa file `.ps1` — sửa xong phải thêm lại.
+- Dựng **worktree** cho 2 agent: `wt-glm-flash` (nhánh `agent/glm-flash`), `wt-deepseek`
+  (nhánh `agent/deepseek`), cùng xuất phát từ commit `8a8f2b0`; script mở cả hai: `chay-2-agent.ps1`.
+- Giao diện (tiếp nối phiên 5-6): sửa lỗi **nhịp cập nhật bị BỎ** thay vì hẹn lại (`refreshPending`)
+  và lỗi **ghi khoá cache trước khi vẽ** (`safeRender`) — hai lỗi này làm UI đứng im dù dữ liệu mới;
+  khôi phục thông báo "không cung cấp gia tốc tuyến tính" (một lần mỗi lần bật cảm biến, không spam);
+  đặt lại nhãn nút huấn luyện sau khi thất bại; thêm thông báo "Model mẫu đang khởi động…" cho vài
+  mẫu demo đầu tiên (đo được: phải tới mẫu thứ 2-3 model mẫu mới chốt phòng).
+- Bỏ hai file chết `server/static/app-v2.js` và `app-v3.js` (đã gộp vào `app.js`; bản gốc còn nguyên
+  trong `backup_original/ui_2026-10-24/` và trong lịch sử git).
+- Môi trường test: GLM đã chạy `pip install -e .` vào `.venv` và xoá `tests/__pycache__/` cũ.
+
+Kiểm chứng cuối (chạy thật): `node --check server/static/app.js` OK · `pytest tests -q` **47/47 pass**
+(không cần PYTHONPATH) · Playwright đăng nhập rồi chạy demo 9 giây: phòng "Phòng ngủ", ô phòng sáng
+đúng, 5 xác suất, 3 sự kiện dòng thời gian, **0 lỗi console/HTTP**; tắt demo trở về đúng trạng thái khóa.
+
+Việc còn lại: **NVIDIA phải sửa `z-ai/glm-5.3-flash` và `deepseek-ai/deepseek-v4.1-flash`** thì hai
+agent mới chạy đúng model chính; hiện tại cả hai tự rơi về MiniMax M3.1 Flash và vẫn làm việc được.
