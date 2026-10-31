@@ -15,8 +15,12 @@ import sys
 import threading
 import time
 
+import requests
+
 from flask import Flask, Response, jsonify, render_template, request, send_from_directory, session as flask_session
 from werkzeug.security import check_password_hash, generate_password_hash
+
+from security_middleware import install_extra_headers, install_input_validation, install_rate_limiting
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))

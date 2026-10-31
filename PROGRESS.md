@@ -189,3 +189,48 @@ Ghi nhận, không sửa (có lý do):
 10. **Build artifact Android khỏi git** — 453 file `app/build/**` + `.gradle/` `.idea/` `.kotlin/` `build/` `local.properties` (machine-specific) đã `git rm -r --cached` (chỉ staged, **chưa commit** — chờ duyệt); `.gitignore` thêm 6 mẫu. README đổi cách cài APK từ "cài file có sẵn" sang "build bằng Android Studio/gradlew" vì APK không còn lưu trong Git.
 
 Kiểm chứng cuối: `pytest tests -q` **50/50 pass**; chạy thật server (DB tạm, không đụng `data/smarthome.db`) + Playwright như trên; server đã dừng, DB tạm đã xóa.
+
+## Phiên 8 (2026-10-31): kiểm tra bảo mật + kiểm tra chức năng
+
+Báo cáo đầy đủ: `docs/11_kiem_tra_bao_mat.md`. Cách làm: đọc mã theo từng lớp tấn công rồi
+**chứng minh bằng thực nghiệm**, không kết luận dựa trên suy đoán.
+
+Đã sửa trong phiên (7 lỗ hổng, đều có bằng chứng trước/sau):
+
+- **CSRF qua "simple request"** ở kênh HTTP của MCP server CHORUS (CAO): trang web bất kỳ POST
+  `Content-Type: text/plain` tới `127.0.0.1:8787/mcp` — trình duyệt không preflight nên công cụ
+  vẫn chạy; đã chứng minh ghi được Shared Memory từ `Origin: evil.example`. Vá bằng: bắt buộc
+  `application/json`, chặn `Origin` lạ, Bearer token.
+- **DNS rebinding** (TB): không kiểm tra `Host` → `Host: attacker.example` vẫn được phục vụ.
+- **Không xác thực kênh HTTP** (TB): gọi được cả `chorus_ask` (tốn hạn mức NVIDIA).
+- **Điểm tiêm lệnh** (TB): `proxyKeyEnv` trong cấu hình được nhúng thẳng vào lệnh PowerShell.
+- **Đăng ký không giới hạn** (TB): `join_code_limiter` tính theo `user_id` nên tạo tài khoản mới là
+  lại có 5 lượt dò mã chia sẻ → thêm `register_limiter` 10 lần/giờ theo IP, kèm test
+  `test_register_rate_limited_per_ip`.
+- Trần thân request của CHORUS hạ 32 MB → 8 MB.
+- **Quyền file chứa khoá** (CAO trên máy dùng chung): `data\secret_key`, `data\smarthome.db`,
+  `.env`, `hub\http-token.txt` đều cho `BUILTIN\Users` đọc **và ghi** — đọc được `secret_key` là
+  ký được cookie phiên để giả mạo bất kỳ tài khoản. Đã siết bằng `C:\chorus\harden-permissions.ps1`
+  (có `-Revert`).
+
+Đã kiểm chứng là **an toàn**: SQL injection (mọi truy vấn tham số hoá), IDOR (mọi thao tác ghi lọc
+theo `home_id`), path traversal (CHORUS `slug()` + `send_from_directory` tên hằng), command injection
+(`subprocess.run` dạng danh sách, `shell=False`), XSS (`escapeHTML` + CSP), tiêm mã Python (không có
+`eval`/`exec`/`pickle`/`yaml.load`), token thiết bị (224 bit, chỉ lưu SHA-256), cách ly dữ liệu giữa
+các nhà (kiểm tra sống: tài khoản thứ hai thấy `room` rỗng, `history = 0`).
+
+Các lỗ hổng **đã được vá trước phiên này** và tôi đọc lại xác nhận: `SECRET_KEY` hằng số công khai,
+giới hạn đăng nhập, giới hạn dò mã chia sẻ, lộ email qua độ trễ (`DUMMY_PASSWORD_HASH`),
+`MAX_CONTENT_LENGTH`, trần mật khẩu 128, header bảo mật (CSP/XFO/nosniff/Referrer-Policy),
+CSV formula injection khi xuất `scans.csv`.
+
+**Kiểm tra chức năng** (chạy sống trên cổng 5000): 13/14 bước đạt — đăng ký, thêm phòng, mã ghép
+thiết bị, mã chia sẻ, trạng thái, hiệu chuẩn, demo scan, lịch sử, cảnh báo, metrics, xuất CSV,
+header bảo mật, đăng xuất. Luồng demo cần 4 lần quét mới chốt phòng (96% → 99%) — hành vi có sẵn
+của model mẫu, giao diện đã báo "Model mẫu đang khởi động…".
+
+Kiểm chứng cuối: `pytest tests -q` **51/51 pass** · `selftest-mcp.js` **28/28 đạt** ·
+`security-probe.js` **0 lỗ hổng / 12 hạng mục**.
+
+Khuyến nghị chưa sửa (chờ quyết định): chạy HTTPS trên LAN thay vì HTTP trần (cookie phiên đang đi
+dạng rõ) · tắt mDNS nếu không dùng · thêm lớp chống CSRF thứ hai bằng cách từ chối thân không phải JSON.
