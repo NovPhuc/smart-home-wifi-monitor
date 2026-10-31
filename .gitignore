@@ -8,6 +8,13 @@ data/raw/android_scans.jsonl
 data/*.db
 data/*.db-shm
 data/*.db-wal
+data/secret_key
+android_collector/.gradle/
+android_collector/.idea/
+android_collector/.kotlin/
+android_collector/build/
+android_collector/app/build/
+android_collector/local.properties
 data/homes/
 models/homes/
 .env

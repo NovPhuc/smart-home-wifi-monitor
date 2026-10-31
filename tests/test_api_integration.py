@@ -26,6 +26,11 @@ def client(tmp_path):
     appmod.runtime_histories.clear()
     appmod.training_jobs.clear()
     appmod.alert_throttle.reset()
+    appmod.login_limiter.reset_all()
+    appmod.join_code_limiter.reset_all()
+    # Bộ test tạo nhiều tài khoản từ cùng một IP nên phải xoá bộ đếm đăng ký,
+    # nếu không sẽ dính 429 (giới hạn 10 lần/giờ là để dùng thật).
+    appmod.register_limiter.reset_all()
     with appmod.app.test_client() as test_client:
         yield test_client
 
@@ -366,3 +371,54 @@ def test_owner_can_remove_member(client):
     login_as(client, "gone@example.com")
     assert client.post(f"/api/homes/{home_id}/select").status_code == 404
     assert all(h["id"] != home_id for h in client.get("/api/auth/me").get_json()["homes"])
+
+
+def test_password_rejected_over_max_length(client):
+    too_long = client.post("/api/auth/register", json={
+        "email": "long@example.com", "password": "x" * 129,
+        "display_name": "Long", "home_name": "Nhà",
+    })
+    assert too_long.status_code == 400
+    assert too_long.get_json()["fields"]["password"]
+    assert client.post("/api/auth/register", json={
+        "email": "long@example.com", "password": "x" * 128,
+        "display_name": "Long", "home_name": "Nhà",
+    }).status_code == 201
+
+
+def test_login_brute_force_lockout(client):
+    register(client, "victim@example.com")
+    for _ in range(5):
+        bad = client.post("/api/auth/login", json={"email": "victim@example.com", "password": "wrong-pass"})
+        assert bad.status_code == 401
+    blocked = client.post("/api/auth/login", json={"email": "victim@example.com", "password": "TEST_PASSWORD_PLACEHOLDER"})
+    assert blocked.status_code == 429
+    assert blocked.get_json()["error"] == "TOO_MANY_ATTEMPTS"
+    # Tài khoản khác không bị ảnh hưởng bởi khóa theo email.
+    register(client, "other@example.com")
+    assert client.post("/api/auth/login", json={"email": "other@example.com", "password": "TEST_PASSWORD_PLACEHOLDER"}).status_code == 200
+
+
+def test_share_code_join_brute_force_lockout(client):
+    register(client, "owner@example.com", "Nhá Chia Sẻ")
+    client.post("/api/auth/logout")
+    register(client, "joiner@example.com", "Nhà Dò Mã")
+    for _ in range(5):
+        assert client.post("/api/homes/join", json={"code": "000000"}).status_code == 404
+    blocked = client.post("/api/homes/join", json={"code": "123456"})
+    assert blocked.status_code == 429
+    assert blocked.get_json()["error"] == "TOO_MANY_ATTEMPTS"
+
+
+def test_register_rate_limited_per_ip(client):
+    """Giới hạn dò mã chia sẻ tính theo user_id, nên nếu đăng ký không giới hạn
+    thì chỉ cần tạo tài khoản mới là lại có 5 lượt thử — mã 6 số sẽ bị dò hết.
+    Cửa đăng ký phải chặn theo IP."""
+    for index in range(10):
+        register(client, f"mass{index}@example.com")
+    blocked = client.post("/api/auth/register", json={
+        "email": "mass-final@example.com", "password": "TEST_PASSWORD_PLACEHOLDER",
+        "display_name": "Mass", "home_name": "Nhà",
+    })
+    assert blocked.status_code == 429
+    assert blocked.get_json()["error"] == "TOO_MANY_ATTEMPTS"

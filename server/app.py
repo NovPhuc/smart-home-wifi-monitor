@@ -8,6 +8,7 @@ import csv
 import io
 import json
 import os
+import secrets
 import sqlite3
 import subprocess
 import sys
@@ -29,9 +30,39 @@ from smarthome.storage import SmartHomeDatabase
 
 
 cfg = load_config(ROOT / "config.yaml")
+def resolve_secret_key() -> str:
+    """Khóa ký session cookie.
+
+    Ưu tiên biến môi trường SMART_HOME_SECRET_KEY (README đã hướng dẫn).
+    Nếu không có, sinh khóa ngẫu nhiên và lưu vào file data/secret_key để
+    phiên đăng nhập (kể cả app Android khôi phục phiên) không mất sau mỗi
+    lần khởi động lại. Bản cũ dùng chuỗi cố định
+    "change-this-development-secret" — ai đọc được source có thể tự ký
+    cookie để giả mạo đăng nhập, nên không bao giờ dùng khóa mặc định.
+    """
+    from_env = os.getenv("SMART_HOME_SECRET_KEY", "").strip()
+    if from_env:
+        return from_env
+    database_path = Path(os.getenv("SMART_HOME_DATABASE", ROOT / "data" / "smarthome.db"))
+    key_file = database_path.parent / "secret_key"
+    try:
+        if key_file.exists():
+            stored = key_file.read_text(encoding="utf-8").strip()
+            if stored:
+                return stored
+        key = secrets.token_hex(32)
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+        key_file.write_text(key, encoding="utf-8")
+        print(f"[Bao mat] SMART_HOME_SECRET_KEY chua dat — da sinh khoa moi, luu tai {key_file} (khong dua len Git).")
+        return key
+    except OSError:
+        print("[Bao mat] SMART_HOME_SECRET_KEY chua dat — dung khoa ngau nhien cho phien nay, doi sau khi restart.")
+        return secrets.token_hex(32)
+
+
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config.update(
-    SECRET_KEY=os.getenv("SMART_HOME_SECRET_KEY", "change-this-development-secret"),
+    SECRET_KEY=resolve_secret_key(),
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.getenv("SMART_HOME_SECURE_COOKIE", "0") == "1",
@@ -39,6 +70,29 @@ app.config.update(
 )
 
 db = SmartHomeDatabase(os.getenv("SMART_HOME_DATABASE", ROOT / "data" / "smarthome.db"))
+
+
+@app.after_request
+def security_headers(response: Response) -> Response:
+    """Header bảo mật cơ bản cho trình duyệt.
+
+    - nosniff: chặn trình duyệt đoán kiểu nội dung.
+    - X-Frame-Options / frame-ancestors: chặn nhúng dashboard trong iframe
+      (clickjacking).
+    - CSP: chỉ cho phép tài nguyên cùng nguồn. style-src cần 'unsafe-inline'
+      vì app.js vẽ thanh xác suất bằng thuộc tính style nội tuyến
+      (style="transform:scaleX(...)").
+    """
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; connect-src 'self'; font-src 'self'; "
+        "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    )
+    return response
 demo_engine = SmartHomeInferenceEngine(cfg, ROOT / "models")
 engine = demo_engine  # Backward-compatible import for existing scripts.
 lock = threading.RLock()
@@ -50,6 +104,59 @@ training_jobs: dict[int, dict] = {}
 alert_throttle = AlertThrottle(
     cooldown_seconds=float(cfg.get("alerts", {}).get("repeat_cooldown_seconds", 600))
 )
+
+
+class AttemptLimiter:
+    """Chặn dò mật khẩu / dò mã chia sẻ bằng cách thử lặp.
+
+    Mỗi khóa (email khi đăng nhập, user khi tham gia nhà) chỉ được thất bại
+    tối đa ``max_attempts`` lần trong ``window_seconds``; thành công thì xóa
+    đếm. Bộ đếm nằm trong RAM — khởi động lại server là xóa — đủ cho máy chủ
+    gia đình mà không cần thêm thư viện. Mốc 10.000 khóa chặn phình bộ nhớ
+    khi bị dò hàng loạt email khác nhau.
+    """
+
+    def __init__(self, max_attempts: int, window_seconds: float):
+        self.max_attempts = int(max_attempts)
+        self.window_seconds = float(window_seconds)
+        self._failures: dict[str, deque[float]] = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def is_blocked(self, key: str) -> bool:
+        now = time.time()
+        with self._lock:
+            attempts = self._failures[key]
+            while attempts and now - attempts[0] > self.window_seconds:
+                attempts.popleft()
+            return len(attempts) >= self.max_attempts
+
+    def record_failure(self, key: str) -> None:
+        with self._lock:
+            if len(self._failures) > 10_000:
+                self._failures.clear()
+            self._failures[key].append(time.time())
+
+    def reset(self, key: str) -> None:
+        with self._lock:
+            self._failures.pop(key, None)
+
+    def reset_all(self) -> None:
+        with self._lock:
+            self._failures.clear()
+
+
+# 5 lần sai trong 15 phút: đủ rộng cho gõ tay nhầm, đủ chặt để dò thủ công
+# mất hàng tháng thay vì vài giờ (mã chia sẻ chỉ có 10^6 khả năng).
+login_limiter = AttemptLimiter(max_attempts=5, window_seconds=900)
+join_code_limiter = AttemptLimiter(max_attempts=5, window_seconds=900)
+# Giới hạn mã chia sẻ tính theo user_id, nên nếu đăng ký không giới hạn thì kẻ
+# tấn công chỉ cần tạo tài khoản mới là lại có 5 lượt thử — 10^6 mã sẽ bị dò hết
+# sau vài trăm nghìn tài khoản. Chặn luôn ở cửa đăng ký, tính theo IP.
+register_limiter = AttemptLimiter(max_attempts=10, window_seconds=3600)
+
+# Hash giả chỉ để tốn thời gian như một lần kiểm tra thật, chống đoán email
+# nào đã đăng ký qua độ trễ phản hồi (timing attack).
+DUMMY_PASSWORD_HASH = generate_password_hash("tai-khoan-khong-ton-tai")
 
 
 def calibration_settings() -> tuple[int, int, int]:
@@ -239,6 +346,13 @@ def service_worker():
 
 @app.post("/api/auth/register")
 def register():
+    client_ip = request.remote_addr or "unknown"
+    if register_limiter.is_blocked(client_ip):
+        return jsonify({
+            "error": "TOO_MANY_ATTEMPTS",
+            "detail": "Tạo tài khoản quá nhiều lần. Thử lại sau.",
+        }), 429
+    register_limiter.record_failure(client_ip)
     payload = request.get_json(force=True, silent=False) or {}
     email = str(payload.get("email", "")).strip().lower()
     password = str(payload.get("password", ""))
@@ -249,6 +363,8 @@ def register():
         errors["email"] = "Email không hợp lệ"
     if len(password) < 8:
         errors["password"] = "Mật khẩu cần ít nhất 8 ký tự"
+    elif len(password) > 128:
+        errors["password"] = "Mật khẩu tối đa 128 ký tự"
     if not display_name or len(display_name) > 80:
         errors["display_name"] = "Tên hiển thị không hợp lệ"
     if not home_name or len(home_name) > 100:
@@ -269,9 +385,20 @@ def register():
 @app.post("/api/auth/login")
 def login():
     payload = request.get_json(force=True, silent=False) or {}
-    user = db.get_user_by_email(str(payload.get("email", "")))
+    email = str(payload.get("email", "")).strip().lower()
+    # Khóa theo email: kẻ dò một tài khoản bị chặn, các tài khoản khác không
+    # ảnh hưởng. Đánh đổi: người xấu có thể cố tình khóa email của nạn nhân.
+    if login_limiter.is_blocked(email):
+        return jsonify({"error": "TOO_MANY_ATTEMPTS", "detail": "Thử lại sau 15 phút"}), 429
+    user = db.get_user_by_email(email)
+    if user is None:
+        # Email không tồn tại vẫn chạy một lần băm để thời gian phản hồi
+        # giống hệt trường hợp sai mật khẩu.
+        check_password_hash(DUMMY_PASSWORD_HASH, str(payload.get("password", "")))
     if not user or not check_password_hash(user["password_hash"], str(payload.get("password", ""))):
+        login_limiter.record_failure(email)
         return jsonify({"error": "INVALID_CREDENTIALS"}), 401
+    login_limiter.reset(email)
     flask_session.clear()
     flask_session["user_id"] = user["id"]
     homes = db.list_homes(user["id"])
@@ -407,10 +534,16 @@ def join_home():
     code = str(payload.get("code", "")).strip()
     if not code.isdigit() or len(code) != 6:
         return jsonify({"error": "Mã chia sẻ gồm 6 chữ số"}), 400
+    user_id = int(flask_session["user_id"])
+    if join_code_limiter.is_blocked(str(user_id)):
+        return jsonify({"error": "TOO_MANY_ATTEMPTS", "detail": "Thử lại sau 15 phút"}), 429
     try:
-        home = db.join_home_by_code(int(flask_session["user_id"]), code)
+        home = db.join_home_by_code(user_id, code)
     except LookupError as exc:
+        # Mã sai/hết hạn là một lần đoán — đếm vào hạn mức dò mã.
+        join_code_limiter.record_failure(str(user_id))
         return jsonify({"error": str(exc)}), 404
+    join_code_limiter.reset(str(user_id))
     flask_session["active_home_id"] = home["id"]
     return jsonify({"joined_home": home})
 
@@ -512,13 +645,17 @@ def collect():
     session_code = str(payload.get("session_id", "")).strip()
     if not isinstance(wifi, dict) or not wifi or not room_name or not session_code:
         return jsonify({"error": "wifi, room và session_id là bắt buộc"}), 400
+    if len(session_code) > 40:
+        return jsonify({"error": "session_id tối đa 40 ký tự"}), 400
+    if len(wifi) > 64:
+        return jsonify({"error": "Tối đa 64 access point mỗi lần quét"}), 400
     try:
-        clean_wifi = {str(key): float(value) for key, value in wifi.items()}
+        clean_wifi = {str(key)[:64]: float(value) for key, value in wifi.items()}
         target, orientations, required_sessions = calibration_settings()
         session_target = (target + required_sessions - 1) // required_sessions
         result = db.record_wifi_scan(
             home_id=home["id"], room_name=room_name, session_code=session_code,
-            device_name=str(payload.get("device_id", device["name"] if device else "web-collector")),
+            device_name=str(payload.get("device_id", device["name"] if device else "web-collector"))[:80],
             wifi=clean_wifi, orientation=str(payload.get("orientation", "UNKNOWN")),
             timestamp=float(payload.get("timestamp", time.time())),
             collector_device_id=device["id"] if device else None,
@@ -541,11 +678,23 @@ def scan():
     wifi = payload.get("wifi")
     if not isinstance(wifi, dict) or not wifi:
         return jsonify({"error": "wifi phải là object RSSI không rỗng"}), 400
+    if len(wifi) > 64:
+        return jsonify({"error": "Tối đa 64 access point mỗi lần quét"}), 400
+    try:
+        # Chuẩn hóa trước khi đưa vào model: giá trị sai phải trả 400 thay vì
+        # để float() trong preprocessor ném lỗi 500.
+        clean_wifi = {str(key)[:64]: float(value) for key, value in wifi.items()}
+    except (TypeError, ValueError):
+        return jsonify({"error": "Giá trị RSSI phải là số"}), 400
+    try:
+        scan_timestamp = float(payload["timestamp"]) if payload.get("timestamp") is not None else None
+    except (TypeError, ValueError):
+        return jsonify({"error": "timestamp phải là số"}), 400
     home_engine = get_home_engine(home["id"])
     if home_engine is None:
         return jsonify({"error": "MODEL_NOT_AVAILABLE"}), 409
     with lock:
-        result = home_engine.process_scan(wifi, payload.get("timestamp"))
+        result = home_engine.process_scan(clean_wifi, scan_timestamp)
         if result.get("room"):
             persist_result(home["id"], result)
     return jsonify(result)
@@ -666,6 +815,18 @@ def metrics():
     })
 
 
+def csv_formula_safe(value) -> str:
+    """Chống "CSV injection" khi mở file export bằng Excel/LibreOffice.
+
+    Ô văn bản bắt đầu bằng ``=`` ``+`` ``-`` ``@`` có thể bị hiểu là công
+    thức (ví dụ tên phòng do người dùng tự đặt). Thêm dấu nháy đơn phía
+    trước để Excel đọc nguyên chuỗi. Chỉ áp dụng cho các cột văn bản —
+    cột RSSI là số âm thật và phải giữ nguyên.
+    """
+    text = str(value)
+    return "'" + text if text.startswith(("=", "+", "-", "@")) else text
+
+
 @app.get("/api/export/scans.csv")
 @login_required
 def export_scans():
@@ -680,7 +841,10 @@ def export_scans():
     writer.writeheader()
     for scan in scans:
         wifi = json.loads(scan.pop("wifi_json"))
-        writer.writerow({**scan, **wifi})
+        row = {**scan, **wifi}
+        for field in ("session_id", "device_id", "room", "orientation"):
+            row[field] = csv_formula_safe(row.get(field, ""))
+        writer.writerow(row)
     return Response(
         output.getvalue(), mimetype="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="home-{home["id"]}-wifi-scans.csv"'},
@@ -754,6 +918,9 @@ if __name__ == "__main__":
     port = int(server_cfg["port"])
     cert = os.getenv("SMART_HOME_SSL_CERT")
     key = os.getenv("SMART_HOME_SSL_KEY")
+    if cert and key and os.getenv("SMART_HOME_SECURE_COOKIE") is None:
+        # Chạy HTTPS thật thì cookie phiên phải chỉ gửi qua kết nối mã hóa.
+        app.config["SESSION_COOKIE_SECURE"] = True
     mdns_info = None
 
     if server_cfg.get("mdns_enabled", True) and not (cert and key):

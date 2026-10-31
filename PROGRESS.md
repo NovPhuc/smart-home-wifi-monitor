@@ -157,3 +157,35 @@ Kiểm chứng cuối (chạy thật): `node --check server/static/app.js` OK ·
 
 Việc còn lại: **NVIDIA phải sửa `z-ai/glm-5.3-flash` và `deepseek-ai/deepseek-v4.1-flash`** thì hai
 agent mới chạy đúng model chính; hiện tại cả hai tự rơi về MiniMax M3.1 Flash và vẫn làm việc được.
+
+## Phiên 8 (2026-10-31): kiểm tra bảo mật và vá (GLM 5.3 Flash / OpenCode)
+
+Yêu cầu: "kiểm tra lỗi bảo mật và sửa chữa". Soát toàn bộ server Flask, storage, frontend, git, Android manifest.
+
+Đã tốt sẵn (kiểm chứng, không sửa): SQL 100% parameterized (storage.py); XSS chặn bằng `escapeHTML` đầy đủ 5 ký tự ở mọi chỗ innerHTML (app.js), template không có biến Jinja; password băm werkzeug; device token lưu SHA-256; subprocess không qua shell; `yaml.safe_load`; `.env`/`data/*.db` không bị git track; Authorization header sai không bị hạ cấp xuống session.
+
+Đã vá (tất cả chạy thật, **pytest 50/50 pass** — 47 cũ + 3 test mới, 40.81s):
+
+1. **[CAO] SECRET_KEY fallback cố định** (`server/app.py`) — bản cũ dùng `"change-this-development-secret"` khi thiếu env, ai đọc source có thể tự ký cookie giả mạo đăng nhập. Thay bằng `resolve_secret_key()`: env → file `data/secret_key` (sinh ngẫu nhiên 64 hex, gitignored) → ngẫu nhiên per-boot. Giữ được tính năng app Android khôi phục phiên sau restart. Kiểm chứng thật: key dài 64, khác chuỗi mặc định.
+2. **[CAO] Không chống dò** — thêm lớp `AttemptLimiter` (in-memory, cửa sổ trượt): login 5 lần sai/15 phút theo email; `/api/homes/join` 5 lần sai mã/15 phút theo user; thành công thì xóa đếm; vượt hạn trả 429 `TOO_MANY_ATTEMPTS`. Khép lại cảnh báo "mã chia sẻ 6 số không có rate-limit" của phiên 4. Đánh đổi: kẻ xấu có thể cố tình khóa email của nạn nhân (đã ghi trong comment).
+3. **[TB] Mật khẩu không có giới hạn trên** — thêm cap 128 ký tự ở `/api/auth/register`.
+4. **[TB] Đoán email tồn tại qua thời gian phản hồi** — email không tồn tại vẫn chạy một lần `check_password_hash` với hash giả (timing attack).
+5. **[TB] CSV injection ở `/api/export/scans.csv`** — ô văn bản (session_id/device_id/room/orientation) bắt đầu `= + - @` được thêm `'` phía trước; không đụng cột RSSI (số âm thật). Kiểm chứng thật: phòng tên `=HYPERLINK(1,2)` xuất ra `'=HYPERLINK(1,2)`.
+6. **[TB] Cookie không Secure khi chạy HTTPS** — trong `__main__`, có cert/key mà không đặt `SMART_HOME_SECURE_COOKIE` thì tự bật `SESSION_COOKIE_SECURE`.
+7. **[T] `/api/collect` nhận đầu vào quá lớn** — cap `session_id` ≤ 40 ký tự, `device_id` ≤ 80, `wifi` ≤ 64 AP, mỗi key AP ≤ 64 ký tự (chặn phình SQLite).
+
+Thay đổi phụ: `.gitignore` thêm `data/secret_key`; test fixture reset 2 limiter như các state runtime khác; thêm 3 test (`test_password_rejected_over_max_length`, `test_login_brute_force_lockout`, `test_share_code_join_brute_force_lockout`) → 47 → **50 test**.
+
+Ghi nhận, không sửa (có lý do):
+- CSRF: đã giảm thiểu bởi `SameSite=Lax` + mọi endpoint ghi chỉ nhận JSON (`get_json(force=True)` từ form-encoded sẽ lỗi) + mọi mutation là POST/PATCH/DELETE; thêm CSRF token sẽ phá app Android dùng cookie session.
+- Android `usesCleartextTraffic="true"`: chủ đích cho HTTP nội bộ LAN (README ghi rõ); HTTPS đã hỗ trợ qua env SSL.
+- Session limiter nằm trong RAM: restart server là xóa — chấp nhận cho máy chủ gia đình, không thêm thư viện.
+- `android_collector/app/build/` bị track trong git (artifact build, thay đổi mỗi lần assembleDebug) — **đã xử lý tiếp ở phần dưới**.
+
+### Tiếp phiên 8 — hardened tiếp theo yêu cầu "tiếp tục"
+
+8. **Security headers** (`@app.after_request`): `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, CSP `default-src 'self'` (style-src cần `'unsafe-inline'` vì app.js vẽ thanh xác suất bằng style nội tuyến). Kiểm chứng thật: header xuất hiện trên mọi response; Playwright đăng ký tài khoản + chạy demo 9 giây với DB tạm → 5 thanh xác suất inline-style vẫn vẽ đúng, ô "Phòng ngủ" sáng, **0 lỗi CSP** (console chỉ có 2 lỗi có sẵn: 401 /api/auth/me khi chưa đăng nhập, 404 favicon).
+9. **`/api/scan` trả 500 khi đầu vào sai** — `float()` trong `preprocessing._raw_vector` ném ValueError chưa bắt (giá trị RSSI/timestamp không phải số). Chuẩn hóa trước như `/api/collect`: wifi sai → 400, timestamp sai → 400, cap 64 AP, key AP ≤ 64 ký tự.
+10. **Build artifact Android khỏi git** — 453 file `app/build/**` + `.gradle/` `.idea/` `.kotlin/` `build/` `local.properties` (machine-specific) đã `git rm -r --cached` (chỉ staged, **chưa commit** — chờ duyệt); `.gitignore` thêm 6 mẫu. README đổi cách cài APK từ "cài file có sẵn" sang "build bằng Android Studio/gradlew" vì APK không còn lưu trong Git.
+
+Kiểm chứng cuối: `pytest tests -q` **50/50 pass**; chạy thật server (DB tạm, không đụng `data/smarthome.db`) + Playwright như trên; server đã dừng, DB tạm đã xóa.

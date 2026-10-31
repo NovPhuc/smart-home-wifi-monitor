@@ -120,7 +120,7 @@ Android WiFi Collector / Demo fingerprints
 ## Thu dữ liệu thật bằng Android
 
 1. Trên dashboard: đăng nhập → chọn/tạo nhà → tạo tất cả phòng → **Tạo mã ghép nối**.
-2. Cài APK debug tại `android_collector/app/build/outputs/apk/debug/app-debug.apk`, hoặc mở `android_collector/` bằng Android Studio.
+2. Build APK debug bằng Android Studio (mở thư mục `android_collector/` rồi Run) hoặc chạy `gradlew assembleDebug`; APK nằm tại `android_collector/app/build/outputs/apk/debug/app-debug.apk` (không lưu trong Git để repo gọn).
 3. Điện thoại và server dùng cùng LAN. Nhập URL server, ví dụ `http://192.168.1.10:5000`, rồi dán mã ghép nối.
 4. Chọn đúng tên phòng và mã phiên (`S01`, `S02`, `S03`). Bấm **Thu tự động**, đi khắp phòng và lần lượt cầm máy dọc, ngang, đặt phẳng.
 5. Mỗi phòng cần tổng ít nhất 100 mẫu, 3 phiên và 3 hướng. Thu các phiên ở thời điểm/vị trí khác nhau; dashboard hiển thị tiến độ.
