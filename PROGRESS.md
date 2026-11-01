@@ -318,6 +318,45 @@ Mục tiêu theo nghiên cứu mã nguồn mở (ARIL IEEE Access 2019 + FIND3):
 Ràng buộc: giữ tương thích inference hiện tại (interface SmartHomeInferenceEngine
 không đổisignature), 67 test phải luôn pass.
 
+### Cập nhật 2026-11-01 (chiều): G3a XONG — commit `e83a4f3`
+
+Đã làm (chạy thật, **pytest 77/77 pass**):
+- `src/smarthome/models/roomnet_mt.py` — **RoomNetMT**: encoder giống RoomNetLite
+  + `activity_head` 4 lớp (STILL/LIGHT_ACTIVITY/MOVING/ROOM_CHANGE); forward trả
+  `(room_logits, emb, activity_logits)` — 2 phần tử đầu tương thích 100% với
+  RoomNetLite. Kèm `derive_activity_label()` — nhãn hoạt động suy từ cửa sổ bằng
+  ĐÚNG ngưỡng ActivityMonitor (median delta; đổi phòng → ROOM_CHANGE).
+  Lưu ý: bộ luật gốc dùng EMA theo scan, MT dùng median trên cửa sổ — ghi rõ
+  khi báo cáo (chưng cất, không phải sao chép 1:1).
+- `src/smarthome/dataset.py` — **RoomWindowDatasetMT**: thêm phần tử nhãn hoạt
+  động (delta từ RSSI thô, nanmedian theo AP như `_rssi_delta` của luật).
+- `scripts/train_room_mt.py` — giữ nguyên early stopping/cosine restarts/
+  augmentation/CenterLoss/JS temporal của train_room.py; thêm
+  `w_activity·CE_activity`; ghi `roomnet_mt_val_metrics.json` (chỉ số phòng +
+  act_agree + confusion).
+- 3 test mới trong test_algorithms.py (shapes, ngưỡng nhãn, dataset).
+- **Smoke train 2 epoch** (`.tmp/mt_smoke`, không đụng models/ thật):
+  val_acc/F1 = **97.32%**, **act_agree = 97.32%** (ngẫu nhiên = 25%) → head học tốt.
+
+Song song: agent khác đã làm nốt G2b — tách app.js thành ES modules
+(`server/static/js/` 10 file, template nạp `type="module"`, docs/14), service-worker v5,
+Android cert-pinning (commit `dc50581`), `ap_hashing.py`. Commit `e83a4f3` gộp
+cả hai nhánh công việc (đã test chung 77/77 + node --check từng module).
+
+### G3 còn lại (phiên tới)
+1. **G3b — ensemble meta-learning kiểu FIND3**: `scripts/train_ensemble.py`
+   huấn luyện RoomNetLite + SimpleCNN + kNN/RF/MLP (sklearn đã có trong
+   requirements), chọn tốt nhất THEO validation, ghi `model_choice.json`
+   vào `models/homes/<id>/`; `SmartHomeInferenceEngine` đọc model_choice để
+   nạp model phù hợp (sklearn dự đoán theo scan + majority-vote cửa sổ).
+2. **Chạy lại pipeline đầy đủ** với RoomNet-MT + ensemble, seed 42 →
+   `results/g3_multitask/` (room + kfold + anomaly + latency), so sánh
+   with results/after_optimized/.
+3. Nối `roomnet_mt.pt` vào `SmartHomeInferenceEngine` (head hoạt động xuất
+   thêm trường `activity_model` trong /api/status — luật vẫn là driver cảnh báo).
+4. **G4**: sinh lại BAO_CAO_KET_QUA.docx từ results mới (Times New Roman 13),
+   cập nhật README (mục kiến trúc + API /api/stream).
+
 ## Phiên 8 (2026-10-31): kiểm tra bảo mật + kiểm tra chức năng
 
 Báo cáo đầy đủ: `docs/11_kiem_tra_bao_mat.md`. Cách làm: đọc mã theo từng lớp tấn công rồi
