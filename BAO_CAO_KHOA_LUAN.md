@@ -8,8 +8,8 @@
 **Sinh viên:** Nguyễn Hoài Phúc  
 **MSSV:** 2001230687  
 **Ngành:** Công nghệ Thông tin - KLCN 336  
-**Giảng viên hướng dẫn:** TS. Nguyễn Văn A  
-**Năm học:** 2023-2024  
+**Giảng viên hướng dẫn:** ……………………………… *(điền tên GVHD)*
+**Năm học:** 2026–2027
 **Ngày nộp:** 01/11/2026  
 
 ---
@@ -35,7 +35,7 @@
 
 ### 1.1. Bối cảnh và động lực
 
-Dân số già hóa là thách thức chung của nhiều quốc gia, trong đó có Việt Nam. Theo số liệu Tổng cục Thống kê năm 2023, người từ 60 tuổi trở lên chiếm khoảng 12% dân số cả nước, con số này dự kiến tăng lên 25% vào năm 2050. Với xu hướng gia đình hạt nhân, nhiều người cao tuổi sống một mình hoặc ở cùng người thân cũng đã đi làm cả ngày. Việc theo dõi sức khỏe, phát hiện sớm các sự cố như ngã, bất thường hoạt động trở nên cấp thiết.
+Dân số già hóa là thách thức chung của nhiều quốc gia, trong đó có Việt Nam. Theo số liệu công bố của Tổng cục Thống kê, nhóm người từ 60 tuổi trở lên chiếm khoảng 12% dân số Việt Nam trong giai đoạn 2023; các dự báo dân số cho thấy tỷ lệ này có thể đạt khoảng 25% vào năm 2050. Với xu hướng gia đình hạt nhân, nhiều người cao tuổi sống một mình hoặc ở cùng người thân cũng đã đi làm cả ngày. Việc theo dõi sức khỏe, phát hiện sớm các sự cố như ngã, bất thường hoạt động trở nên cấp thiết.
 
 Các giải pháp hiện có chủ yếu dựa trên camera giám sát hoặc thiết bị đeo tay. Camera vi phạm quyền riêng tư, đắt đỏ khi lắp đặt nhiều phòng. Thiết bị đeo tay dễ bị người cao tuổi quên mang, mất pin, hoặc gây khó chịu khi ngủ. Cần một giải pháp **phi xâm nhập, giá thành thấp, không cần tương tác chủ động từ người được giám sát**.
 
@@ -1046,312 +1046,43 @@ CMD ["python", "server/app.py"]
 
 *Test trên 5 người khác nhau, 10 lần/người, điện thoại trong túi áo trước*
 
-### 8.5. Hiệu năng Hệ thống (Raspberry Pi 4 8GB)
+### 8.5. Kích thước model và tài nguyên (đo thật trên máy phát triển)
 
-| Metric | Giá trị |
-|--------|---------|
-| **RAM usage** | ~420 MB (server + model + DB) |
-| **CPU inference** | 12-18% (single core) |
-| **Disk I/O** | ~2 MB/s (DB writes) |
-| **Network** | < 50 KB/s per device |
-| **Uptime test** | 14 ngày liên tục (không restart) |
+| Thành phần | Giá trị đo | Nguồn |
+|--------|---------|-------|
+| RoomNetLite (roomnet_lite.pt) | 49 KB | models/ |
+| GRU Autoencoder (gru_autoencoder.pt) | 104,5 KB | models/ |
+| SimpleCNN (simple_cnn.pt) | 113,1 KB | models/ |
+| Độ trễ suy luận RoomNetLite | 0,0367 ms/mẫu | results/g3_multitask/models/room_test_metrics.json |
+| Độ trễ suy luận RoomNetMT | 0,0193 ms/mẫu | results/g3_multitask/models/room_test_metrics_RoomNetMT.json |
+| Độ trễ end-to-end (softmax + TopologyFilter) | 0,0246 ms/mẫu | cùng file trên |
 
-### 8.6. So sánh với Baseline
+Lưu ý thẳng thắn: các số liệu trên đo trên máy phát triển (Windows, CPU
+thường), chưa đo trên thiết bị edge (Raspberry Pi/ESP32). Đánh giá tài nguyên
+trên thiết bị edge là việc còn lại — xem mục 10.2 và 10.3. Hướng phát triển
 
-| Phương pháp | Accuracy | Inference (ms) | Model size |
-|-------------|----------|----------------|------------|
-| **RoomNet-Lite (ours)** | **87.3%** | **2.1** | **502 KB** |
-| SimpleCNN (baseline) | 81.2% | 3.4 | 115 KB |
-| Random Forest (sklearn) | 78.5% | 1.2 | 2.3 MB |
-| k-NN (k=3) | 74.1% | 8.7 | N/A |
+Đã thực hiện trong khuôn khổ khóa luận: Docker multi-stage, docker-compose.prod
+(Nginx + certbot + Cloudflare Tunnel + Redis), certificate pinning Android,
+rate limit nhiều tầng. Các hướng dưới đây là phương án **nếu** có thời gian và
+điều kiện **có thể** triển khai tiếp:
 
----
-
-## 9. TRIỂN KHAI THỰC TẾ
-
-### 9.1. Chuẩn bị Server (Linux)
-
-```bash
-# 1. Cài Docker + Docker Compose
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-# logout/login lại
-
-# 2. Clone repo
-git clone https://github.com/NovPhuc/smart-home-wifi-monitor.git
-cd smart-home-wifi-monitor
-
-# 3. Tạo thư mục data/models
-mkdir -p data models
-
-# 4. Cấu hình .env (copy từ .env.example)
-cp .env.example .env
-# Chỉnh sửa .env:
-# SMART_HOME_SECRET_KEY=... (python -c "import secrets; print(secrets.token_hex(32))")
-# SMART_HOME_SECURE_COOKIE=1
-# SMART_HOME_SSL_CERT=/path/to/cert.pem
-# SMART_HOME_SSL_KEY=/path/to/key.pem
-```
-
-### 9.2. Cấu hình Cloudflare Tunnel (HTTPS miễn phí)
-
-```bash
-# 1. Cài cloudflared
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-sudo dpkg -i cloudflared-linux-amd64.deb
-
-# 2. Đăng nhập Cloudflare
-cloudflared tunnel login
-
-# 3. Tạo tunnel
-cloudflared tunnel create an-tam-home
-
-# 4. Cấu hình DNS
-cloudflared tunnel route dns an-tam-home an-tam.example.com
-
-# 4. Chạy tunnel (systemd service)
-sudo tee /etc/systemd/system/cloudflared.service > /dev/null <<EOF
-[Unit]
-Description=Cloudflare Tunnel
-After=network.target
-
-[Service]
-Type=simple
-User=$USER
-ExecStart=/usr/local/bin/cloudflared tunnel run --token YOUR_TUNNEL_TOKEN
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl enable --now cloudflared
-```
-
-### 9.3. Docker Compose Production
-
-```yaml
-# docker-compose.prod.yml
-services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: prod
-    image: an-tam-home:2310
-    container_name: an-tam-home
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./data:/app/data
-      - ./models:/app/models
-    environment:
-      - SMART_HOME_DATABASE=/app/data/smarthome.db
-      - SMART_HOME_SECRET_KEY=${SMART_HOME_SECRET_KEY}
-      - SMART_HOME_SECURE_COOKIE=1
-      - SMART_HOME_SSL_CERT=/app/certs/cert.pem
-      - SMART_HOME_SSL_KEY=/app/certs/key.pem
-      - PYTHONPATH=/app/src
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
-
-  nginx:
-    image: nginx:alpine
-    container_name: an-tam-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certs:/etc/nginx/certs:ro
-    depends_on:
-      - app
-
-  certbot:
-    image: certbot/certbot
-    container_name: an-tam-certbot
-    volumes:
-      - ./certs:/etc/letsencrypt
-      - ./certbot-www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h; done'"
-```
-
-### 9.4. Nginx Config (nginx.conf)
-
-```nginx
-events {
-    worker_connections 1024;
-}
-
-http {
-    upstream app {
-        server app:5000;
-    }
-    
-    # Rate limiting zone
-    limit_req_zone $binary_remote_addr zone=api:10m rate=30r/s;
-    limit_req_zone $binary_remote_addr zone=auth:10m rate=5r/m;
-    
-    server {
-        listen 80;
-        server_name an-tam.example.com;
-        
-        # ACME challenge for Let's Encrypt
-        location /.well-known/acme-challenge/ {
-            root /var/www/certbot;
-        }
-        
-        # Redirect all HTTP to HTTPS
-        location / {
-            return 301 https://$server_name$request_uri;
-        }
-    }
-    
-    server {
-        listen 443 ssl http2;
-        server_name an-tam.example.com;
-        
-        ssl_certificate /etc/letsencrypt/live/an-tam.example.com/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/an-tam.example.com/privkey.pem;
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers HIGH:!aNULL:!MD5;
-        
-        # Security headers (bổ sung cho Flask)
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-        add_header X-Frame-Options DENY always;
-        add_header X-Content-Type-Options nosniff always;
-        
-        # Auth endpoints - stricter rate limit
-        location /api/auth/ {
-            limit_req zone=auth burst=10 nodelay;
-            proxy_pass http://app;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-        
-        # API endpoints
-        location /api/ {
-            limit_req zone=api burst=50 nodelay;
-            proxy_pass http://app;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            
-            # SSE support
-            proxy_buffering off;
-            proxy_cache off;
-            proxy_read_timeout 300s;
-        }
-        
-        # Static files
-        location /static/ {
-            proxy_pass http://app;
-            expires 1y;
-            add_header Cache-Control "public, immutable";
-        }
-        
-        # Dashboard
-        location / {
-            proxy_pass http://app;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-    }
-}
-```
-
-### 9.5. Chạy Production
-
-```bash
-# 1. Tạo chứng chỉ SSL (Let's Encrypt)
-sudo mkdir -p certs certbot-www
-docker compose -f docker-compose.prod.yml run --rm certbot certonly \
-    --webroot -w /var/www/certbot -d an-tam.example.com \
-    --email admin@example.com --agree-tos --no-eff-email
-
-# 2. Khởi động
-docker compose -f docker-compose.prod.yml up -d
-
-# 3. Kiểm tra
-docker compose -f docker-compose.prod.yml logs -f
-curl https://an-tam.example.com/api/health
-# {"status":"ok","database":"ok","service":"an-tam-home","api":"v1","time":...}
-```
-
-### 9.6. Cấu hình Android cho Production
-
-1. Mở app → nhập `https://an-tam.example.com` (hoặc bật Auto Discover nếu cùng LAN)
-2. Đăng nhập web dashboard `https://an-tam.example.com` với `demo@home.vn` / `demo123`
-3. Settings → Devices → Add Device → copy token
-4. Dán token vào app Android
-3. Chọn phòng, session ID → Start Collect
-
----
-
-## 10. KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN
-
-### 10.1. Tóm tắt thành quả
-
-Đề tài đã xây dựng thành công hệ thống giám sát người cao tuổi trong nhà thông minh với các thành quả chính:
-
-1. **Định vị mức phòng** đạt 87.3% accuracy trên test set với RoomNet-Lite (502 KB, 2.1ms inference trên CPU)
-2. **Phát hiện bất thường** hoạt động hàng ngày bằng GRU-AE đạt AUC-ROC 0.934
-3. **Phát hiện ngã** bằng gia tốc kế điện thoại đạt sensitivity 88%, specificity 94%
-4. **Hệ thống end-to-end** chạy ổn định 14+ ngày trên Raspberry Pi 4 (420MB RAM, <20% CPU)
-5. **Bảo mật đầy đủ**: HTTPS, certificate pinning, rate limiting, scrypt, parameterized queries, CSP
-6. **Triển khai dễ dàng**: Docker, Cloudflare Tunnel, NSD auto-discovery, PWA dashboard
-
-### 10.2. Hạn chế hiện tại
-
-- **Độ chính xác phòng** còn thấp ở phòng nhỏ (Nhà tắm 83%) do ít AP nghe được
-- **Phát hiện ngã** yêu cầu mang điện thoại - không phù hợp người cao tuổi không quen smartphone
-- **Huấn luyện** cần dữ liệu mỗi phòng (tối thiểu 3 phiên x 3 hướng x 100 mẫu)
-- **Topology filter** chỉ xử lý chuyển phòng đơn, chưa xử lý đa người
-
-### 10.3. Hướng phát triển
-
-| Ngắn hạn (3-6 tháng) | Trung hạn (6-12 tháng) | Dài hạn (1-2 năm) |
+| Ngắn hạn (nếu tiếp tục phát triển) | Trung hạn (có thể làm sau khóa luận) | Dài hạn (cần nguồn lực) |
 |----------------------|------------------------|-------------------|
-| Cải thiện accuracy phòng nhỏ (thêm AP ảo, transfer learning) | Federated learning giữa các nhà (privacy-preserving) | Tích hợp radar mmWave (phát hiện ngã không cần điện thoại) |
-| Thêm cảm biến môi trường (temp, humidity, CO2) | Multi-person tracking (WiFi CSI + camera) | Predictive health analytics (xu hướng suy giảm) |
-| Auto-retrain model khi drift | Edge TPU acceleration (Coral) | Tích hợp hệ thống y tế (EMR, bác sĩ) |
-| Multi-language UI (VI/EN/JP) | Voice alerts (TTS) | Dự đoán nguy cơ nhập viện |
-
----
+| **Server chung nhiều gia đình**: schema đã hỗ trợ nhiều tài khoản/nhà trên một máy chủ; nếu mở rộng cần bảng gói dịch vụ và phân cách tài nguyên | **Lưu trữ phân tán**: SQLite đủ cho một máy chủ; nếu chạy nhiều worker/nhiều node, chuyển rate limit và phiên sang Redis (compose.prod có sẵn Redis), model artifact lưu S3/MinIO | Federated learning giữa các nhà (privacy-preserving) |
+| **Rate limit phân tán**: bộ đếm hiện nằm trong RAM từng tiến trình; nếu chạy >1 worker phải chuyển sang bộ đếm dùng chung | **Backup tự động**: sqlite backup API + đồng bộ lên node phụ (rclone/scp) | Radar mmWave phát hiện ngã không cần điện thoại |
+| K-fold cho RoomNetMT; thu dữ liệu RSSI thực tế (việc bắt buộc còn lại) | Multi-person tracking (WiFi CSI) | Tích hợp hệ thống y tế (EMR) |
+| Thêm cảm biến môi trường (nhiệt độ, độ ẩm) | Auto-retrain khi dữ liệu drift | Dự đoán xu hướng sức khỏe dài hạn |
 
 ## 11. TÀI LIỆU THAM KHẢO
 
-1. Wen, Y., Zhang, K., Li, Z., & Qiao, Y. (2016). A Discriminative Feature Learning Approach for Deep Face Recognition. *ECCV 2016*.
-2. Kotaru, M., Joshi, K., Bharadia, D., & Katti, S. (2015). SpotFi: Decimeter Level Localization Using WiFi. *ACM SIGCOMM 2015*.
-3. Wang, J., et al. (2019). Deep Learning for Wireless Localization with CSI: A Survey. *IEEE Access*.
-4. Zhang, X., et al. (2020). WiFall: Device-Free Fall Detection Using WiFi. *IEEE TDSC*.
-5. Yang, J., et al. (2018). Efficient Human Activity Recognition Using Smartphone Sensors. *IEEE Sensors Journal*.
+1. Wen, Y., Zhang, K., Li, Z., & Qiao, Y. (2016). A Discriminative Feature Learning Approach for Deep Face Recognition. *ECCV 2016*. (Cảm hứng CenterLoss trong RoomNetLite.)
+2. Bahl, P., & Padmanabhan, V. N. (2000). RADAR: An In-Building RF-based User Location and Tracking System. *IEEE INFOCOM 2000*. (Nền tảng WiFi fingerprinting.)
+3. Wang, F., Feng, J., Zhao, Y., Zhang, X., Zhang, S., & Han, J. (2019). Joint Activity Recognition and Indoor Localization with WiFi Fingerprints. *IEEE Access*; arXiv:1904.04964. (Tham khảo multi-task cho RoomNet-MT; mã nguồn mở geekfeiw/ARIL.)
+4. Scholl, Z. (2019). FIND3 — Framework for Internal Navigation and Discovery. https://github.com/schollz/find3. (Tham khảo quy trình learn/track và meta-learning.)
 5. Goodfellow, I., Bengio, Y., & Courville, A. (2016). *Deep Learning*. MIT Press.
-6. OWASP Foundation. (2023). *OWASP Top 10:2021*. https://owasp.org/Top10/
-7. Cloudflare. (2024). *Cloudflare Tunnel Documentation*. https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/
-8. Android Developers. (2024). *Network Security Configuration*. https://developer.android.com/training/articles/security-config
-9. PyTorch Team. (2024). *torch.load weights_only*. https://pytorch.org/docs/stable/generated/torch.load.html
-10. NIST. (2023). *SP 800-63B: Digital Identity Guidelines*. https://pages.nist.gov/800-63-3/
-
----
+6. Pedregosa, F., et al. (2011). Scikit-learn: Machine Learning in Python. *Journal of Machine Learning Research*, 12.
+7. OWASP Foundation. *OWASP Top 10:2021*. https://owasp.org/Top10/
+8. Cloudflare. *Cloudflare Tunnel Documentation*. https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
 
 ## 12. PHỤ LỤC
 

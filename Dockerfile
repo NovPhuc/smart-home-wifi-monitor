@@ -91,8 +91,19 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')" || exit 1
 
-# Chạy server
-CMD ["python", "server/app.py"]
+# Chạy server.
+#
+# KHÔNG dùng `python server/app.py` ở đây: đó là Werkzeug dev server (một tiến
+# trình, in cảnh báo đỏ, không có worker pool). Gunicorn với worker `gthread` là
+# bắt buộc vì dashboard dùng Server-Sent Events ở /api/stream — worker `sync`
+# sẽ giữ trọn một tiến trình cho mỗi kết nối SSE.
+#   2 worker × 8 luồng = 16 request đồng thời, trần SSE của app là 32 kết nối.
+#   --timeout 300 để SSE (heartbeat 15 giây) không bị cắt giữa chừng.
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", \
+     "--worker-class", "gthread", "--workers", "2", "--threads", "8", \
+     "--timeout", "300", "--graceful-timeout", "30", \
+     "--access-logfile", "-", "--error-logfile", "-", \
+     "server.wsgi:application"]
 
 # =============================================================================
 # Stage 4: Full source image (để chia sẻ/backup toàn bộ project)

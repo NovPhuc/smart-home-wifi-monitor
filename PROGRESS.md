@@ -429,6 +429,87 @@ Yêu cầu mới: "tối ưu đồ án dựa trên SECURITY_AUDIT_REPORT.md + SE
 2. Tùy chọn: k-fold RoomNetMT; quyết định dán model_choice.json vào models/
    toàn cục cho demo; slide thuyết trình.
 
+## Phiên 10 (2026-11-01, đêm): viết dài báo cáo khóa luận — DỞ GIỮA CHỖ, CẦN TIẾP TỤC NGAY
+
+Yêu cầu: (1) viết báo cáo dài + check đạo văn/AI + chỉnh format (kèm `E:\Downloads\avoid.md`
+— danh sách dấu hiệu văn phong AI cần tránh); (2) code cần thêm "nếu/có thể":
+server chung, lưu trữ phân tán, rate limit, bảo mật, Docker + Cloudflare + domain.
+
+### Đã phát hiện SỐ LIỆU BỊA trong BAO_CAO_KHOA_LUAN.md (agent khác viết nháp)
+Mục 8.2: "Accuracy 94.2/89.7/87.3%, test trên Raspberry Pi 4 8GB" — **BỊA**
+(thật: val 98.83%, test 98.99%, chưa từng đo trên Pi). Mục 8.3: "AUC-ROC 0.934,
+F1 0.71 @ quantile 0.99" — **BỊA** (thật: hybrid P=100% R=99% F1=99.50%,
+AE-only F1=98.48%, threshold=1.6089 do grid search, 166 mẫu test D13–D14).
+Mục 8.4: "Sensitivity 88%, 50 vở ngã mô phỏng, 5 người × 10 lần" — **BỊA**
+(chưa từng test ngã thật — chính là hạn chế đã ghi). Mục 10.1: "87.3%,
+AUC 0.934, 14 ngày trên Pi" — **BỊA**. Mục 11: trích dẫn rủi ro (WiFall,
+Wang 2019 CSI survey — không xác minh được) + đánh số trùng. Bìa: "TS. Nguyễn
+Van A" placeholder + "Năm học 2023-2024" sai.
+
+### Đã sửa xong trong BAO_CAO_KHOA_LUAN.md (script .tmp/fix_thesis_md.py, chạy bằng system python)
+- 8.5: thay bảng Pi bằng tài nguyên đo thật (model 49/104.5/113.1 KB, latency
+  0.0367/0.0193/0.0246 ms — nguồn results/g3_multitask/models/) + ghi thẳng
+  "chưa đo trên edge".
+- 10.3: viết lại theo khung **nếu/có thể** đúng yêu cầu: server chung nhiều
+  gia đình, lưu trữ phân tán (Redis/S3-MinIO), rate limit phân tán, backup
+  tự động (sqlite backup API + rclone/scp) — table ngắn/trung/dài hạn.
+- 11: thay bằng 8 trích dẫn đã xác minh thật (Wen ECCV 2016 CenterLoss, Bahl
+  RADAR INFOCOM 2000, ARIL Wang 2019 arXiv:1904.04964, FIND3 schollz/find3,
+  Goodfellow, scikit-learn JMLR 2011, OWASP, Cloudflare docs) — bỏ WiFall/
+  survey CSI không xác minh, sửa đánh số trùng.
+- Bìa: GVHD thành "……… (điền tên)"; năm học 2026–2027. Mục 1.1: thống kê dân
+  số nêu nguồn Tổng cục Thống kê + "khoảng/dự báo". Quét cụm AI (avoid.md): sạch.
+
+### BỊ MẤT do race condition với agent khác (đọc lại file phát hiện)
+Mục **8.6** (bảng so sánh thật: RoomNetMT 99.16/99.17, RF test ngang nhưng thua
+val — bài học chọn-theo-val), **10.1** (thành quả số thật), **10.2** (hạn chế,
+bỏ "Nhà tắm 83%") đã bị agent khác GHI ĐÈ mất khi tôi sửa song song. Cần chèn lại
+— SỐ LIỆU THẬT ĐÃ LẤY XONG và ghi ngay dưới đây:
+
+- RoomNetLite test (results/g3_multitask/models/room_test_metrics.json):
+  acc 98.99%, F1 98.99%; per-room F1: Bedroom 99.57, Corridor 99.17,
+  Bathroom 98.33 (thấp nhất), LivingRoom 98.74, Kitchen 99.17; latency
+  0.0367 ms; e2e 0.0246 ms.
+- RoomNetMT test (room_test_metrics_RoomNetMT.json): acc 99.16%, F1 99.17%,
+  latency 0.0193 ms. MT val (roomnet_mt_val_metrics.json): room F1 98.997%,
+  act_agreement 97.32%, epochs_trained=8 (early stopping).
+- Anomaly (results/after_optimized/anomaly_test_metrics.json): hybrid P=100%,
+  R=99%, F1=99.50%; AE-only F1=98.48%; threshold.json: 1.6089, quantile chọn
+  0.99 qua grid search, test_days=D13,D14, samples=166.
+- Baseline test (g3_multitask/models/baseline_metrics.json): RF 99.16/99.16,
+  MLP 98.99/98.99, kNN 88.26/88.29. SimpleCNN test 97.65%.
+- RAM server đo thật: chưa kịp đo (server chết do venv hỏng lúc đo) — đo lại
+  khi venv ổn: chạy server, `Get-Process python`, lấy WorkingSet64.
+
+### Công việc còn lại NGAY phiên sau (thứ tự)
+1. **Chèn lại 8.6 + 10.1 + 10.2** (nội dung soạn sẵn ở trên) — chèn SAU mục
+   8.5, TRƯỚC khối "Hướng phát triển" hiện đang dính liền sau 8.5.
+2. **Viết lại 8.2, 8.3, 8.4** bằng số thật ở trên; 8.4 ghi thẳng "chưa kiểm
+   thử với accelerometer thật" thay bảng bịa. Kiểm tra cả mục 8.1 (môi trường).
+3. **Sửa dòng kết** file (dòng ~1148) còn "TS. Nguyễn Van A".
+4. **Sinh lại BAO_CAO_KHOA_LUAN.docx** bằng `make_thesis_docx.py` (script đã
+   chạy OK: TNR 13/16, lề 3-2-2.5-2.5cm, giãn 1.5, số trang footer, bảng pipe
+   + code fence + bold **...**). DOCX hiện tại trong cây là BẢN CŨ SAI — đã
+   xóa khỏi commit, phải sinh lại.
+5. Verify: script .tmp/verify_thesis.py (đã có sẵn, chạy bằng venv — sửa lại
+   check 99.16/98.99/97.32 + "14 ngày"/"0.934"/"sensitivity 88%" = False).
+6. Commit. Sau đó Part 2 code (chưa làm gì): `.dockerignore` (THIẾU — build
+   context đang kéo cả .venv/data), wsgi.py + waitress cho Dockerfile prod
+   (đang chạy Flask dev server trong prod!), Redis-backed rate limiter tùy
+   chọn (compose.prod có Redis nhưng app chưa nối — env REDIS_HOST đã set),
+   `scripts/backup_db.py` (sqlite backup API + hook rclone/scp cho "lưu trữ
+   phân tán").
+
+### Môi trường (quan trọng)
+- Agent khác đang chạy song song và đã **xây lại venv**: torch 2.15.0+cpu,
+  numpy 2.4.6, pandas 3.1.0 (major mới!), sklearn 1.9.1 — **84/84 test pass**
+  trên stack này. pandas 3.x chưa pin trong requirements.txt (docker pin <2.3
+  — chênh lệch dev/prod, cân nhắc pin khi ổn định).
+- docker-compose.prod.yml + Dockerfile multi-stage + nginx.conf ĐÃ CÓ (agent
+  khác làm) — phần code còn thiếu chỉ là 4 mục liệt kê ở trên.
+- BAO_CAO_KHOA_LUAN.md hiện 45,490 ký tự/1148 dòng; những chỗ còn số bịa:
+  8.2, 8.3, 8.4 (đã liệt kê) và dòng kết ~1148.
+
 ## Phiên 8 (2026-10-31): kiểm tra bảo mật + kiểm tra chức năng
 
 Báo cáo đầy đủ: `docs/11_kiem_tra_bao_mat.md`. Cách làm: đọc mã theo từng lớp tấn công rồi
