@@ -86,6 +86,9 @@ mobile_sensor:
 
 alerts:
   repeat_cooldown_seconds: 600
+  # Webhook ngoài cho cảnh báo CRITICAL (Telegram/IFTTT/ntfy.sh...).
+  # Để trống thì tắt. Ví dụ: https://ntfy.sh/ten-kenh-rieng-cua-ban
+  webhook_url: ""
 
 calibration:
   target_samples_per_room: 100

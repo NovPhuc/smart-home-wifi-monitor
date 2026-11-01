@@ -190,6 +190,45 @@ Ghi nhận, không sửa (có lý do):
 
 Kiểm chứng cuối: `pytest tests -q` **50/50 pass**; chạy thật server (DB tạm, không đụng `data/smarthome.db`) + Playwright như trên; server đã dừng, DB tạm đã xóa.
 
+## Phiên 9 (2026-10-31): VIẾT LẠI TOÀN BỘ CHỨC NĂNG — ĐANG DỞ, CHƯA XONG
+
+Yêu cầu: "viết lại toàn bộ chức năng" kèm nguyên tắc trong `E:\Downloads\tinhnang.md` (nghiên cứu mã nguồn mở trước khi làm). Đã chọn phạm vi: **tất cả** (tầng app + tầng ML). Checkpoint phiên 8: commit `4e3289e` trên nhánh `fix/optimize-training`.
+
+### Nghiên cứu đã xong (theo tinh thần tinhnang.md)
+- **FIND3** (schollz/find3, 4.8k★): learn/track tách pha, ensemble meta-learning 10 classifier, WebSocket realtime, SQLite. → tham khảo G2, G3.
+- **ARIL** (IEEE Access 2019, geekfeiw/ARIL): multi-task 1D ResNet, 1 encoder chung cho activity + location. Dùng CSI+SDR nên chỉ mượn ý tưởng multi-task cho G3.
+- CSI/ESP32 presence (espectre-sense): hướng tương lai, không làm trong khóa luận này.
+- Kết luận: kiến trúc hiện tại đã sát FIND3; khoảng cách lớn = polling 3 req/2s (nên SSE) + model đơn lẻ (nên ensemble/multi-task).
+
+### Kế hoạch 4 giai đoạn
+- **G1 — Tầng server (ĐANG LÀM, dở ~40%)**: tách `server/app.py` (952 dòng) thành module. Đường dẫn API + hành vi giữ 100% nguyên bản (Android/PWA không vỡ). Test phải xanh từng bước.
+- **G2 — Realtime + frontend**: SSE (`/api/stream`) thay polling (không thêm thư viện, Flask stream được); tách `app.js` 1113 dòng thành ES modules; service-worker cache list cập nhật.
+- **G3 — Tầng ML**: multi-task model (encoder chung + head phòng + head hoạt động, ARIL-style) + ensemble/meta-learning chọn model theo nhà (FIND3-style). Chạy lại toàn pipeline trên dữ liệu v2 → `results/` mới. Không bịa số liệu.
+- **G4 — Báo cáo + docs**: sinh lại `BAO_CAO_KET_QUA.docx` từ results mới qua `make_report.py` (Times New Roman 13), cập nhật README.
+
+### G1 — hiện trạng khi dừng (code CHẠY ĐƯỢC: app.py cũ chưa bị đụng, các file mới chỉ add-on)
+Đã tạo:
+- `server/app_state.py` — singleton runtime (cfg, db, engines/monitors/histories/jobs, 3 limiter, demo_engine/demo_source, lock, reset_runtime). Đã bao gồm `register_limiter` (theo IP, 10/giờ) — lưu ý: `register_limiter` là do agent khác thêm sau phiên 8, KHÔNG phải của phiên 8; giữ nguyên hành vi.
+- `server/app_security.py` — resolve_secret_key, AttemptLimiter, DUMMY_PASSWORD_HASH, secure_cookie_requested, apply_security_headers, csv_formula_safe.
+- `server/app_services.py` — calibration_settings, new_sensor_monitor, login_required, active_home, require_* helpers, home_progress, get_home_engine, persist_result.
+- `server/routes/__init__.py` — register_routes(app) đăng ký 5 blueprint.
+- `server/routes/auth_views.py` (register/login/logout/me), `server/routes/home_views.py` (homes/select/modify/share/members/join) — đã viết xong.
+
+Còn lại của G1 (làm tiếp theo đúng thứ tự):
+1. `server/routes/room_views.py` — rooms GET/POST/PATCH/DELETE + devices GET/POST/DELETE (copy logic từ app.py dòng 560-625, tham chiếu qua `app_state.*`).
+2. `server/routes/track_views.py` — index, service-worker, calibration, collect, scan, demo/scan, sensor, sensor/status, status, history, alerts, config, metrics, export/scans.csv, reset (app.py dòng 334-910).
+3. `server/routes/training_views.py` — run_training + start + status (app.py dòng 854-892).
+4. Viết lại `server/app.py` thành bản lắp ráp: sys.path setup → create_app() (config + after_request apply_security_headers + register_routes + route `/` và `/service-worker.js`) → re-export cho test (app, cfg, db, home_engines, sensor_monitors, last_results, runtime_histories, training_jobs, alert_throttle, login_limiter, join_code_limiter, register_limiter, demo_engine, engine, demo_source, `import time`) → khối `__main__` giữ nguyên (mDNS, SSL, cookie secure tự bật).
+5. Sửa fixture trong `tests/test_api_integration.py`: `appmod.app_state.db = SmartHomeDatabase(tmp_path/"api.db")` + `appmod.app_state.reset_runtime()` (bắt buộc — re-export cũ không thấy swap db). Thân test KHÔNG đổi; `monkeypatch appmod.time` vẫn hoạt động vì app.py vẫn `import time`.
+6. Chạy `pytest tests -q` → phải ≥51 pass; `node --check` không cần (JS chưa đụng); chạy thật server + đăng nhập + demo để xác nhận không vỡ.
+7. Commit checkpoint G1 với thông báo riêng.
+
+### Ràng buộc khi làm tiếp (đọc kỹ)
+- Không đổi đường dẫn API, tên trường JSON, mã lỗi — Android `MainActivity.kt` và PWA đang phụ thuộc.
+- `appmod.time` bị monkeypatch (test_serial_share_code_expiry) — app.py phải giữ `import time`.
+- 3 limiter nằm trong `app_state` — fixture phải reset qua `app_state.reset_runtime()`.
+- Không commit khi chưa hỏi; mỗi bước code phải chạy được.
+
 ## Phiên 8 (2026-10-31): kiểm tra bảo mật + kiểm tra chức năng
 
 Báo cáo đầy đủ: `docs/11_kiem_tra_bao_mat.md`. Cách làm: đọc mã theo từng lớp tấn công rồi

@@ -12,6 +12,8 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "server"))
 
 import app as appmod  # server/app.py  (module-level Flask app + engine)
+import app_services
+from security_middleware import RateLimiter
 from smarthome.storage import SmartHomeDatabase
 
 
@@ -19,18 +21,13 @@ from smarthome.storage import SmartHomeDatabase
 def client(tmp_path):
     """Fresh database and clean runtime state for every test."""
     appmod.app.config["TESTING"] = True
-    appmod.db = SmartHomeDatabase(tmp_path / "api.db")
-    appmod.home_engines.clear()
-    appmod.sensor_monitors.clear()
-    appmod.last_results.clear()
-    appmod.runtime_histories.clear()
-    appmod.training_jobs.clear()
-    appmod.alert_throttle.reset()
-    appmod.login_limiter.reset_all()
-    appmod.join_code_limiter.reset_all()
-    # Bộ test tạo nhiều tài khoản từ cùng một IP nên phải xoá bộ đếm đăng ký,
-    # nếu không sẽ dính 429 (giới hạn 10 lần/giờ là để dùng thật).
-    appmod.register_limiter.reset_all()
+    # Route đọc trạng thái qua module app_state, nên phải thay db và xoá
+    # runtime state tại đó — gán appmod.db (bí danh) sẽ không có tác dụng.
+    appmod.app_state.db = SmartHomeDatabase(tmp_path / "api.db")
+    appmod.app_state.reset_runtime()
+    # Rate limit nằm ở middleware, không thuộc app_state: bộ test gửi hàng
+    # trăm request từ cùng IP 127.0.0.1 nên phải xóa bộ đếm mỗi test.
+    appmod.reset_rate_limits(appmod.app)
     with appmod.app.test_client() as test_client:
         yield test_client
 
@@ -422,3 +419,156 @@ def test_register_rate_limited_per_ip(client):
     })
     assert blocked.status_code == 429
     assert blocked.get_json()["error"] == "TOO_MANY_ATTEMPTS"
+
+
+def test_health_endpoint_is_public_and_json(client):
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "ok"
+    assert payload["database"] == "ok"
+
+
+def test_unknown_api_route_returns_json_not_html(client):
+    response = client.get("/api/khong-ton-tai")
+    assert response.status_code == 404
+    assert response.is_json
+    assert response.get_json()["error"] == "NOT_FOUND"
+
+
+def test_write_endpoint_rejects_non_json_body(client):
+    # HTML form chỉ gửi được text/plain hoặc urlencoded, không gửi được JSON.
+    response = client.post(
+        "/api/auth/logout", data="email=a@b.c", content_type="text/plain"
+    )
+    assert response.status_code == 415
+    assert response.get_json()["error"] == "UNSUPPORTED_MEDIA_TYPE"
+
+
+def test_security_headers_allow_motion_sensors(client):
+    response = client.get("/")
+    policy = response.headers["Permissions-Policy"]
+    assert "accelerometer=(self)" in policy
+    assert "gyroscope=(self)" in policy
+    # Dashboard chạy HTTP trong LAN: không được gửi HSTS cho kết nối chưa TLS.
+    assert "Strict-Transport-Security" not in response.headers
+
+    secure = client.get("/api/health", base_url="https://localhost")
+    assert secure.headers["Strict-Transport-Security"].startswith("max-age=")
+
+
+def test_room_rejects_non_finite_dwell_minutes(client):
+    register(client, "dwell@example.com")
+    for index, value in enumerate((float("nan"), float("inf"), -5, 5000)):
+        response = client.post(
+            "/api/rooms",
+            json={"name": f"Phòng {index}", "max_dwell_minutes": value},
+        )
+        assert response.status_code == 400, response.get_data(as_text=True)
+
+
+def test_collect_rejects_non_finite_rssi(client):
+    register(client, "rssi@example.com")
+    create_rooms(client, ["Phòng ngủ"])
+    for value in (float("nan"), float("inf")):
+        response = client.post("/api/collect", json={
+            "wifi": {"AP1": value}, "room": "Phòng ngủ", "session_id": "S01",
+        })
+        assert response.status_code == 400, response.get_data(as_text=True)
+
+
+def test_device_platform_is_capped(client):
+    register(client, "platform@example.com")
+    response = client.post(
+        "/api/devices", json={"name": "Phone", "platform": "x" * 500}
+    )
+    assert response.status_code == 201
+    assert len(response.get_json()["device"]["platform"]) == 40
+
+
+def test_rate_limiter_ignores_forwarded_for_unless_proxy_trusted(client, monkeypatch):
+    monkeypatch.setenv("SMART_HOME_TRUST_PROXY", "0")
+    with appmod.app.test_request_context(
+        headers={"X-Forwarded-For": "203.0.113.9"},
+        environ_base={"REMOTE_ADDR": "127.0.0.1"},
+    ):
+        assert RateLimiter._client_id() == "127.0.0.1"
+
+    monkeypatch.setenv("SMART_HOME_TRUST_PROXY", "1")
+    with appmod.app.test_request_context(
+        headers={"X-Forwarded-For": "203.0.113.9"},
+        environ_base={"REMOTE_ADDR": "127.0.0.1"},
+    ):
+        assert RateLimiter._client_id() == "203.0.113.9"
+
+
+def test_rate_limiter_blocks_then_resets(client):
+    limiter = RateLimiter()
+    with appmod.app.test_request_context():
+        assert limiter.check("test", 2, 60)[0] is True
+        assert limiter.check("test", 2, 60)[0] is True
+        allowed, info = limiter.check("test", 2, 60)
+        assert allowed is False
+        assert info["retry_after"] == 60
+        limiter.reset()
+        assert limiter.check("test", 2, 60)[0] is True
+
+
+def test_critical_alert_webhook_payload(client, monkeypatch):
+    calls = []
+
+    def fake_post(url, **kwargs):
+        calls.append((url, kwargs))
+
+    monkeypatch.setattr(app_services.requests, "post", fake_post)
+    monkeypatch.setitem(appmod.cfg["alerts"], "webhook_url", "https://example.test/hook")
+
+    app_services._post_webhook(
+        7, "Nhà Ông Bà",
+        {"status": "CRITICAL", "room": "Bedroom", "reasons": ["x"], "timestamp": 1.0},
+    )
+    assert len(calls) == 1
+    url, kwargs = calls[0]
+    assert url == "https://example.test/hook"
+    assert kwargs["json"]["home"] == "Nhà Ông Bà"
+    assert kwargs["json"]["home_id"] == 7
+    assert kwargs["allow_redirects"] is False
+
+
+def test_notify_alert_only_for_critical_and_configured(monkeypatch):
+    started = []
+
+    class FakeThread:
+        def __init__(self, **kwargs):
+            started.append(kwargs)
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(app_services.threading, "Thread", FakeThread)
+    monkeypatch.setitem(appmod.cfg["alerts"], "webhook_url", "")
+    app_services.notify_alert(1, "Nhà", {"status": "CRITICAL"})
+    assert not started
+
+    monkeypatch.setitem(appmod.cfg["alerts"], "webhook_url", "https://example.test/hook")
+    app_services.notify_alert(1, "Nhà", {"status": "WARNING"})
+    assert not started
+
+    app_services.notify_alert(1, "Nhà", {"status": "CRITICAL"})
+    assert len(started) == 1
+    assert started[0]["args"][1] == "Nhà"
+
+
+def test_health_reports_degraded_when_database_is_unavailable(client):
+    class BrokenDatabase:
+        def connect(self):
+            raise RuntimeError("database is gone")
+
+    original = appmod.app_state.db
+    appmod.app_state.db = BrokenDatabase()
+    try:
+        response = client.get("/api/health")
+    finally:
+        appmod.app_state.db = original
+    assert response.status_code == 503
+    assert response.get_json()["database"] == "error"

@@ -390,9 +390,17 @@ function renderRooms() {
       <div class="entity-row">
         <div><strong>${escapeHTML(room.name)}</strong>
           <small>Cảnh báo lưu trú sau ${room.max_dwell_minutes} phút</small></div>
-        <button type="button" data-delete-room="${room.id}"
-          aria-label="Xóa phòng ${escapeHTML(room.name)}">Xóa</button>
+        <div class="row-actions">
+          <button type="button" class="secondary" data-rename-room="${room.id}"
+            aria-label="Đổi tên phòng ${escapeHTML(room.name)}">Đổi tên</button>
+          <button type="button" data-delete-room="${room.id}"
+            aria-label="Xóa phòng ${escapeHTML(room.name)}">Xóa</button>
+        </div>
       </div>`).join('') || '<div class="empty-state">Chưa có phòng. Hãy thêm ít nhất hai phòng.</div>';
+    list.querySelectorAll('[data-rename-room]').forEach(button => {
+      const room = state.rooms.find(item => item.id === Number(button.dataset.renameRoom));
+      if (room) button.addEventListener('click', () => ignore(renameRoom(room)));
+    });
     list.querySelectorAll('[data-delete-room]').forEach(button => {
       button.addEventListener('click', () => ignore(deleteRoom(Number(button.dataset.deleteRoom))));
     });
@@ -540,6 +548,20 @@ function renderCalibration(calibration) {
   setField($('trainingMeta'), ready ? 'Định vị thời gian thực đã được mở.'
     : calibration.data_ready ? 'Bấm huấn luyện và giữ máy chủ hoạt động.'
       : 'Mỗi phòng cần đủ mẫu, hướng cầm và 3 phiên.');
+}
+
+async function renameRoom(room) {
+  const name = prompt('Tên phòng mới:', room.name);
+  if (name === null) return;
+  const trimmed = name.trim();
+  if (!trimmed || trimmed === room.name) return;
+  // PATCH mặc định max_dwell_minutes=60 nếu thiếu, nên gửi lại giá trị cũ
+  // để đổi tên không âm thầm đổi ngưỡng cảnh báo lưu trú.
+  await api(`/api/rooms/${room.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name: trimmed, max_dwell_minutes: room.max_dwell_minutes })
+  });
+  await loadHome();
 }
 
 async function deleteRoom(id) {

@@ -9,7 +9,7 @@
  *  - Chỉ trả về trang chủ khi điều hướng thất bại. Bản cũ trả HTML cho mọi
  *    request lỗi, kể cả CSS/JS — trình duyệt nhận HTML thay cho script.
  */
-const CACHE_NAME = 'an-tam-home-v4';
+const CACHE_NAME = 'an-tam-home-v5';
 const APP_SHELL = [
   '/',
   '/static/style.css',

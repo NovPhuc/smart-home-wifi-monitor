@@ -101,6 +101,7 @@ Android WiFi Collector / Demo fingerprints
 | `POST` | `/api/auth/register`, `/api/auth/login` | Tạo tài khoản, đăng nhập bằng session bảo mật |
 | `GET/POST` | `/api/homes` | Liệt kê hoặc tạo nhà |
 | `GET/POST` | `/api/rooms` | Liệt kê hoặc tạo phòng trong nhà đang chọn |
+| `PATCH/DELETE` | `/api/rooms/<id>` | Đổi tên/ngưỡng lưu trú hoặc xóa phòng |
 | `POST` | `/api/devices` | Tạo mã ghép nối Android; mã đầy đủ chỉ trả về một lần |
 | `GET` | `/api/calibration` | Tiến độ mẫu, phiên và hướng cầm theo từng phòng |
 | `POST` | `/api/scan` | Định vị từ RSSI thật sau khi hiệu chuẩn và huấn luyện xong |
@@ -116,6 +117,16 @@ Android WiFi Collector / Demo fingerprints
 | `POST` | `/api/sensor` | Nhận gia tốc tuyến tính `{x, y, z}` từ iPhone/PWA |
 | `GET` | `/api/sensor/status` | Trạng thái cảm biến điện thoại gần nhất |
 | `POST` | `/api/reset` | Bắt đầu lại phiên giám sát |
+| `GET` | `/api/health` | Health check công khai: trạng thái server và database |
+
+## Bảo mật và vận hành
+
+- **HTTPS:** đặt `SMART_HOME_SSL_CERT` + `SMART_HOME_SSL_KEY`; khi đó cookie session tự bật `Secure` và server gửi HSTS. Chạy HTTP trong LAN thì không gửi HSTS (tránh trình duyệt ghi nhớ nhầm).
+- **Session:** cookie tên `session`, `HttpOnly`, `SameSite=Lax`. Không đổi tên cookie vì Android Collector lưu/khôi phục phiên theo tên này.
+- **Rate limit:** chỉ áp lên `/api/*` (dashboard/static không bị chặn). Vượt ngưỡng trả `429` kèm `Retry-After`. Nếu server nằm sau reverse proxy tin cậy, đặt `SMART_HOME_TRUST_PROXY=1` để dùng `X-Forwarded-For`; **không bật** khi client kết nối trực tiếp, nếu không client tự giả header sẽ vượt được giới hạn.
+- **Ghi dữ liệu:** mọi `POST/PUT/PATCH/DELETE` có body phải gửi `Content-Type: application/json` (lớp phòng thủ CSRF thứ hai). Các POST không body như `/api/auth/logout`, `/api/reset`, `/api/training/start` vẫn hợp lệ.
+- **Lỗi API:** luôn trả JSON `{"error": "...", "message": "..."}` cho `/api/*`, kể cả 400/404/413/500.
+- **Android:** `android:allowBackup="false"` để session cookie/token không bị lôi ra qua backup ADB hoặc cloud backup.
 
 ## Thu dữ liệu thật bằng Android
 

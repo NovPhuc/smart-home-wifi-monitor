@@ -267,6 +267,11 @@
 @media (hover: hover) and (pointer: fine) {
   .entity-row button:hover { background: #3a2f3d; }
 }
+.row-actions { display: flex; gap: 6px; }
+.entity-row .row-actions button.secondary { background: #1b3550; color: #a9d4ff; }
+@media (hover: hover) and (pointer: fine) {
+  .entity-row .row-actions button.secondary:hover { background: #24486b; }
+}
 
 .token-reveal {
   margin-top: 14px;
