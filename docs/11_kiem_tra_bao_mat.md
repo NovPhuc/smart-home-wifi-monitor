@@ -107,3 +107,61 @@ $env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m pytest tests -q
 C:\chorus\harden-permissions.ps1
 C:\chorus\harden-permissions.ps1 -Revert
 ```
+
+---
+
+## 7. Soát lại sau khi tách `app.py` thành module (phiên 9)
+
+Phiên 9 tách `app.py` (917 dòng) thành `app_state`, `app_security`, `app_services`,
+`security_middleware` và `routes/` (5 blueprint). Rủi ro lớn nhất của kiểu tách này là
+**một endpoint bị mất trang trí `@login_required`** — không có gì báo lỗi, chỉ âm thầm hở.
+Vì vậy tôi kiểm bằng cách liệt kê URL map rồi gọi **không kèm phiên đăng nhập**.
+
+### 7.1 Quét phân quyền — `scripts/security_sweep.py`
+
+```
+Đã quét 39 tổ hợp (route, method) trong 34 route /api/*
+Không endpoint nào trả dữ liệu khi chưa xác thực (ngoài danh sách công khai).
+Danh sách công khai có chủ đích: /api/auth/login, /api/auth/logout,
+                                 /api/auth/register, /api/health
+```
+
+Mỗi tổ hợp được gọi **hai lần**: một lần không có phiên, một lần kèm
+`Authorization: Bearer ath_khong-he-ton-tai` — để bắt cả trường hợp token sai bị
+âm thầm hạ cấp thành quyền của session. Không trường hợp nào trả 200.
+
+Lưu ý: `POST /api/auth/logout` trả 200 khi chưa đăng nhập là **đúng**, không phải hở —
+nó chỉ xoá một phiên rỗng, không tiết lộ dữ liệu và không thao tác lên dữ liệu của ai.
+Script đã ghi rõ lý do trong danh sách công khai.
+
+### 7.2 Các lớp bảo mật mới — đã kiểm chứng sống
+
+| Lớp | Cách kiểm chứng | Kết quả |
+|---|---|---|
+| Giới hạn tần suất theo nhóm endpoint | Gửi 35 request tới `/api/auth/login` (nhóm `auth` = 30/60s) | 30 request đầu → 401, request 31–35 → **429**. Đúng ngưỡng |
+| `X-Forwarded-For` không được tin mặc định | 35 request, **mỗi request một XFF khác nhau** | Vẫn bị chặn ở request 31 ⇒ header không làm thay đổi danh tính client. Chỉ tin khi `SMART_HOME_TRUST_PROXY=1` |
+| Chặn body không phải JSON cho thao tác ghi (lớp CSRF thứ hai) | POST `/api/rooms` với `text/plain` và `application/x-www-form-urlencoded` | Cả hai → **415**. Đây là thứ HTML form không thể vượt qua |
+| HSTS chỉ khi HTTPS | Đọc mã + chạy HTTP | Không gửi HSTS trên kết nối không TLS |
+| Lỗi API trả JSON, không lộ nội bộ | Đọc mã | Log traceback ở server, client chỉ nhận `{"error":"INTERNAL_ERROR"}` |
+
+Mã `RateLimiter` dùng `time.monotonic()` (không bị ảnh hưởng khi đồng hồ hệ thống đổi),
+có `threading.Lock`, và có trần `MAX_TRACKED_CLIENTS = 4096` kèm dọn cửa sổ cũ — nên
+kẻ đổi IP liên tục không làm phình bộ nhớ.
+
+### 7.3 Ghi nhận (không phải lỗ hổng)
+
+`security_middleware` có thêm lớp lọc mẫu SQLi/XSS bằng regex trên query/path. Đây
+**không phải biện pháp bảo vệ** — regex danh sách đen luôn bypass được, và lớp này không
+hề chạm tới JSON body (nơi tên phòng/tên nhà thực sự nằm). Nó được ghi chú đúng vai trò
+là "chặn sớm request tầm thường để đỡ nhiễu log"; hàng rào thật vẫn là truy vấn tham số
+hoá + Jinja escape, và cả hai đều đã có. Điểm cần lưu ý là **rủi ro chặn nhầm** nếu sau
+này có endpoint nhận chuỗi tự do qua query string.
+
+### 7.4 Kiểm chứng cuối phiên 9
+
+```
+python scripts/security_sweep.py   -> 39 tổ hợp, 0 hở phân quyền
+pytest tests -q                    -> 79 passed
+node C:\chorus\selftest-mcp.js     -> 28/28 đạt
+node C:\chorus\security-probe.js   -> 0 lỗ hổng / 12 hạng mục
+```
