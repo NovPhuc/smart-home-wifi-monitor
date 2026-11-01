@@ -408,6 +408,27 @@ Yêu cầu mới: "tối ưu đồ án dựa trên SECURITY_AUDIT_REPORT.md + SE
    (hiện models/ toàn cục chưa dán model_choice — giữ nguyên hành vi demo cũ,
    quyết định dán khi duyệt).
 
+### Cập nhật 2026-11-01 (đêm): G4 XONG — commit `7a71388`
+
+- `make_report.py` cập nhật thành báo cáo **tuần 11**: thêm mục 3.1 (kết quả
+  G3 đọc trực tiếp từ results/g3_multitask/models/*.json — không nhập tay),
+  6 bullet việc tuần 9–11 (tái cấu trúc server + bảo mật, SSE, RoomNetMT,
+  ensemble, sửa scanner), bằng chứng mới ở mục 4, mục 5 ghi thẳng "hạn tuần
+  9–10 đã qua" cho dữ liệu thực tế, mục 6 đổi tuần 9–10 thành ĐẠT MỘT PHẦN.
+- Viết theo `E:\Downloads\avoid.md` (dấu hiệu văn bản AI): câu ngắn có số
+  liệu + đường dẫn file, không dùng các cụm khuôn mẫu ("đóng vai trò như",
+  "không chỉ… mà còn", liệt kê 3 tính từ), thừa nhận thẳng giới hạn. Đã kiểm
+  chứng bằng script đọc ngược docx: 6 bảng, đủ số liệu 99.16/97.32/99.00/4
+  findings, font Times New Roman 13, 0 cụm AI-phrases.
+- `python-docx` bổ sung vào requirements.txt (make_report.py cần).
+- Kết luận báo cáo: 9 ĐẠT / 2 ĐẠT MỘT PHẦN / 1 CHƯA ĐẠT — giữ nguyên đánh giá
+  trung thực, nêu rõ mọi số liệu hiện tại chỉ có giá trị trên dữ liệu mô phỏng v2.
+
+### Kế hoạch phiên kế tiếp
+1. Thu thập dữ liệu RSSI thực tế (việc CAO duy nhất còn lại — cần thiết bị thật).
+2. Tùy chọn: k-fold RoomNetMT; quyết định dán model_choice.json vào models/
+   toàn cục cho demo; slide thuyết trình.
+
 ## Phiên 8 (2026-10-31): kiểm tra bảo mật + kiểm tra chức năng
 
 Báo cáo đầy đủ: `docs/11_kiem_tra_bao_mat.md`. Cách làm: đọc mã theo từng lớp tấn công rồi
