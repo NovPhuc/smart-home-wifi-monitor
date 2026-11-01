@@ -257,3 +257,20 @@ Chỉ còn 3 cảnh báo `deprecated` có sẵn từ trước (`resolveService`,
 | `local.properties` trỏ `sdk.dir=E:\Android` | `E:\Android` chỉ chứa thư mục Android Studio, **không phải Android SDK** ⇒ Gradle báo thiếu `platforms;android-34` và `build-tools;34.0.0`. | SDK thật nằm ở `%LOCALAPPDATA%\Android\Sdk` (đã có android-33/34/35/36 và build-tools 34.0.0). Trỏ `sdk.dir` về đó. File này đã nằm trong `.gitignore` nên chỉ ảnh hưởng máy này. |
 
 Cả hai lỗi đều **có sẵn từ trước**, không phát sinh do bản vá bảo mật.
+
+---
+
+## 10. Siết thêm khi nạp model (phiên 11)
+
+`torch.load` không có `weights_only=True` sẽ dùng pickle để dựng lại đối tượng, nên một file
+`.pt` bị thay bằng file độc là thực thi mã. Đã ghi rõ `weights_only=True` cho **cả 3 chỗ** nạp
+model trong `src/smarthome/inference.py` (room model, head hoạt động RoomNet-MT, GRU autoencoder).
+
+Kiểm chứng trước khi đổi: nạp thử cả 4 file `.pt` của dự án bằng `weights_only=True` — tất cả
+đều là `OrderedDict` chỉ chứa `Tensor`, nạp thành công, 0 lỗi. Sau khi đổi, khởi tạo
+`SmartHomeInferenceEngine` trên `models/` thật vẫn nạp đủ room model + anomaly detector, và
+`pytest tests -q` → **82 passed**.
+
+`joblib.load` cho các baseline sklearn **không có** chế độ an toàn tương đương (joblib dùng
+pickle). Đã ghi chú ngay tại chỗ gọi: artifact phải do chính pipeline của dự án sinh ra trong
+`models/`, không được trỏ `artifact_dir` vào thư mục tải từ ngoài vào.
