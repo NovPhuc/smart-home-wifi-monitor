@@ -11,6 +11,7 @@ from smarthome.topology import build_transition_matrix, TopologyFilter
 from smarthome.dataset import AnomalyFeatureBuilder
 from smarthome.activity import ActivityMonitor
 from smarthome.alerts import AlertThrottle
+from smarthome.ap_hashing import hash_bssid
 from smarthome.metrics import collect_model_metrics
 from smarthome.mobile_sensor import MobileSensorMonitor
 from smarthome.storage import SmartHomeDatabase
@@ -128,6 +129,61 @@ def test_sqlite_multi_home_calibration_and_device_token(tmp_path):
     assert progress["data_ready"] is True
     assert progress["localization_ready"] is False
     assert len(database.export_scans(home["id"])) == 18
+
+
+def test_hash_bssid_matches_spec_vectors():
+    # Vector kiểm chứng đặc tả GĐ3 (khớp hashBssid phía Kotlin).
+    assert hash_bssid("aa:bb:cc:dd:ee:ff") == "AP_c1582e87c802"
+    assert hash_bssid("00:11:22:33:44:55") == "AP_66fd6ef831e4"
+    # BSSID chữ hoa (netsh trên PC) phải cho CÙNG tên AP với chữ thường.
+    assert hash_bssid("AA:BB:CC:DD:EE:FF") == "AP_c1582e87c802"
+
+
+def test_record_wifi_scan_dedup(tmp_path):
+    database = SmartHomeDatabase(tmp_path / "test.db")
+    user = database.create_user("dedup@example.com", "hash", "Gia đình")
+    home = database.create_home(user["id"], "Nhà test")
+    database.create_room(home["id"], "Phòng ngủ")
+
+    # (a) cùng scan_timestamp → bản thứ hai là trùng, không chèn thêm.
+    first = database.record_wifi_scan(
+        home_id=home["id"], room_name="Phòng ngủ", session_code="S01",
+        device_name="Pixel 8", wifi={"AP_1": -50}, orientation="PORTRAIT_UP",
+        timestamp=1000.0, scan_timestamp=900.0, target_samples=2,
+    )
+    second = database.record_wifi_scan(
+        home_id=home["id"], room_name="Phòng ngủ", session_code="S01",
+        device_name="Pixel 8", wifi={"AP_1": -50}, orientation="PORTRAIT_UP",
+        timestamp=1001.0, scan_timestamp=900.0, target_samples=2,
+    )
+    assert first["duplicate"] is False
+    assert second["duplicate"] is True
+    assert second["samples"] == first["samples"] == 1
+
+    # (b) client cũ không có scan_timestamp: nội dung RSSI giống hệt trong
+    # vòng 10 giây cũng là trùng.
+    third = database.record_wifi_scan(
+        home_id=home["id"], room_name="Phòng ngủ", session_code="S01",
+        device_name="Pixel 8", wifi={"AP_1": -52}, orientation="PORTRAIT_UP",
+        timestamp=1003.0, target_samples=2,
+    )
+    fourth = database.record_wifi_scan(
+        home_id=home["id"], room_name="Phòng ngủ", session_code="S01",
+        device_name="Pixel 8", wifi={"AP_1": -52}, orientation="PORTRAIT_UP",
+        timestamp=1005.0, target_samples=2,
+    )
+    assert third["duplicate"] is False
+    assert fourth["duplicate"] is True
+
+    # Nội dung khác (khác hash) trong cùng khung 10 giây vẫn được lưu.
+    fifth = database.record_wifi_scan(
+        home_id=home["id"], room_name="Phòng ngủ", session_code="S01",
+        device_name="Pixel 8", wifi={"AP_1": -70}, orientation="PORTRAIT_UP",
+        timestamp=1006.0, target_samples=2,
+    )
+    assert fifth["duplicate"] is False
+    # Đã lưu: first, third và fifth (second, fourth là bản trùng).
+    assert fifth["samples"] == 3
 
 
 def test_room_key_migration_backfills_vietnamese_names(tmp_path):

@@ -152,6 +152,15 @@ def collect():
             for key, value in wifi.items()
         }
         scan_timestamp = finite_float(payload.get("timestamp", time.time()), field="timestamp")
+        # Client Android mới gửi thêm "scan_timestamp" (epoch giây của lần quét
+        # theo đồng hồ thiết bị) để server nhận diện bản trùng theo (a). Client
+        # cũ không có trường này → server tự rơi về so sánh hash nội dung (b).
+        scan_ts_payload = payload.get("scan_timestamp")
+        scan_ts = (
+            finite_float(scan_ts_payload, field="scan_timestamp")
+            if scan_ts_payload is not None
+            else None
+        )
         target, orientations, required_sessions = calibration_settings()
         session_target = (target + required_sessions - 1) // required_sessions
         result = app_state.db.record_wifi_scan(
@@ -161,6 +170,7 @@ def collect():
             timestamp=scan_timestamp,
             collector_device_id=device["id"] if device else None,
             target_samples=session_target, required_orientations=orientations,
+            scan_timestamp=scan_ts,
         )
     except (TypeError, ValueError, LookupError) as exc:
         return jsonify({"error": str(exc)}), 400

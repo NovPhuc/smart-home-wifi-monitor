@@ -22,7 +22,7 @@ def _norm_room_name(name: str) -> str:
     return unicodedata.normalize("NFC", name.strip()).lower()
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -88,7 +88,9 @@ CREATE TABLE IF NOT EXISTS wifi_scans (
     timestamp REAL NOT NULL,
     orientation TEXT NOT NULL DEFAULT 'UNKNOWN',
     ap_count INTEGER NOT NULL,
-    wifi_json TEXT NOT NULL
+    wifi_json TEXT NOT NULL,
+    scan_ts REAL,
+    wifi_hash TEXT
 );
 
 CREATE TABLE IF NOT EXISTS predictions (
@@ -178,7 +180,25 @@ class SmartHomeDatabase:
             version = int(connection.execute("PRAGMA user_version").fetchone()[0])
             if version < SCHEMA_VERSION:
                 self._migrate_rooms_name_key(connection)
+                self._migrate_scan_reliability(connection)
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+    @staticmethod
+    def _migrate_scan_reliability(connection: sqlite3.Connection) -> None:
+        """Thêm cột chống trùng scan (port Giai đoạn 1 từ bản 1006).
+
+        Chỉ ``ALTER TABLE ... ADD COLUMN`` cho cột chưa tồn tại nên chạy lại
+        nhiều lần vẫn an toàn; dữ liệu hiện có không bị đụng tới.
+        """
+        existing = {row["name"] for row in connection.execute("PRAGMA table_info(wifi_scans)").fetchall()}
+        if "scan_ts" not in existing:
+            connection.execute("ALTER TABLE wifi_scans ADD COLUMN scan_ts REAL")
+        if "wifi_hash" not in existing:
+            connection.execute("ALTER TABLE wifi_scans ADD COLUMN wifi_hash TEXT")
+        # Tìm bản trùng theo phiên + scan_ts nhanh thay vì quét toàn bảng.
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_wifi_scans_session_ts ON wifi_scans(collection_session_id, scan_ts)"
+        )
 
     @staticmethod
     def _migrate_rooms_name_key(connection: sqlite3.Connection) -> None:
@@ -490,9 +510,20 @@ class SmartHomeDatabase:
         collector_device_id: int | None = None,
         target_samples: int = 100,
         required_orientations: int = 3,
+        scan_timestamp: float | None = None,
     ) -> dict:
+        """Lưu một fingerprint có nhãn phòng vào phiên thu.
+
+        Chống trùng (port Giai đoạn 1 từ bản 1006): bản ghi bị coi là trùng
+        khi cùng phiên và (a) cùng ``scan_timestamp`` khác NULL, hoặc (b)
+        client cũ không gửi ``scan_timestamp`` mà nội dung RSSI giống hệt bản
+        ghi liền trước trong vòng 10 giây. Bản trùng không được chèn, tiến độ
+        giữ nguyên — tránh Android retry hoặc scan cache làm phình dữ liệu.
+        """
         orientation = (orientation or "UNKNOWN").strip().upper()[:32]
         normalized = _norm_room_name(room_name)
+        scan_ts = float(scan_timestamp) if scan_timestamp is not None else None
+        fingerprint_hash = _wifi_hash(wifi)
         with self.connect() as connection:
             room = connection.execute(
                 "SELECT * FROM rooms WHERE home_id=? AND _name_key=?",
@@ -512,16 +543,35 @@ class SmartHomeDatabase:
                 session_id = cursor.lastrowid
             else:
                 session_id = session_row["id"]
-            connection.execute(
-                "INSERT INTO wifi_scans(collection_session_id,home_id,room_id,device_id,timestamp,orientation,ap_count,wifi_json) VALUES(?,?,?,?,?,?,?,?)",
-                (session_id, home_id, room["id"], device_name, float(timestamp), orientation, len(wifi), json.dumps(wifi)),
-            )
+
+            duplicate = False
+            if scan_ts is not None:
+                duplicate = connection.execute(
+                    "SELECT 1 FROM wifi_scans WHERE collection_session_id=? AND scan_ts=? LIMIT 1",
+                    (session_id, scan_ts),
+                ).fetchone() is not None
+            else:
+                previous = connection.execute(
+                    "SELECT timestamp, wifi_hash FROM wifi_scans WHERE collection_session_id=? ORDER BY id DESC LIMIT 1",
+                    (session_id,),
+                ).fetchone()
+                duplicate = (
+                    previous is not None
+                    and previous["wifi_hash"] == fingerprint_hash
+                    and abs(float(timestamp) - float(previous["timestamp"])) <= 10.0
+                )
+
+            if not duplicate:
+                connection.execute(
+                    "INSERT INTO wifi_scans(collection_session_id,home_id,room_id,device_id,timestamp,orientation,ap_count,wifi_json,scan_ts,wifi_hash) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    (session_id, home_id, room["id"], device_name, float(timestamp), orientation, len(wifi), json.dumps(wifi), scan_ts, fingerprint_hash),
+                )
             counts = connection.execute(
                 "SELECT COUNT(*) AS samples, COUNT(DISTINCT CASE WHEN orientation!='UNKNOWN' THEN orientation END) AS orientations FROM wifi_scans WHERE collection_session_id=?",
                 (session_id,),
             ).fetchone()
             ready = counts["samples"] >= int(target_samples) and counts["orientations"] >= int(required_orientations)
-            if ready:
+            if ready and not duplicate:
                 connection.execute(
                     "UPDATE collection_sessions SET status='COMPLETE', completed_at=COALESCE(completed_at,?) WHERE id=?",
                     (time.time(), session_id),
@@ -536,6 +586,7 @@ class SmartHomeDatabase:
                 "target_samples": int(target_samples),
                 "ready": ready,
                 "aps": len(wifi),
+                "duplicate": duplicate,
             }
 
     def calibration_progress(

@@ -558,6 +558,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         results.forEach { r -> wifiJson.put(hashBssid(r.BSSID), r.level) }
         val payload = JSONObject().apply {
             put("timestamp", System.currentTimeMillis() / 1000.0)
+            // Thời điểm quét thật (epoch giây) theo ScanResult.timestamp (micro
+            // giây kể từ boot) — server dùng để nhận diện bản ghi trùng khi retry.
+            put("scan_timestamp", scanTimestampSeconds(results))
             put("device_id", Build.MODEL ?: "android-phone")
             put("wifi", wifiJson)
             put("orientation", currentOrientation)
@@ -632,8 +635,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun hashBssid(bssid: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(bssid.toByteArray())
+        // Viết thường trước khi băm: netsh trên PC trả BSSID chữ hoa còn
+        // Android trả chữ thường — cùng thiết bị phải cho CÙNG tên AP
+        // (vector kiểm chứng: aa:bb:cc:dd:ee:ff -> AP_c1582e87c802).
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(bssid.trim().lowercase().toByteArray())
         return "AP_" + digest.take(6).joinToString("") { "%02x".format(it) }
+    }
+
+    /** Đổi ScanResult.timestamp (micro giây từ boot) sang epoch giây. */
+    private fun scanTimestampSeconds(results: List<android.net.wifi.ScanResult>): Double {
+        val maxMicros = results.maxOfOrNull { it.timestamp } ?: 0L
+        val nowMs = System.currentTimeMillis()
+        val elapsedMs = android.os.SystemClock.elapsedRealtime()
+        return (nowMs - elapsedMs + maxMicros / 1000.0) / 1000.0
     }
 
     /**
