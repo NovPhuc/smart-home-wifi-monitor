@@ -129,6 +129,73 @@ def test_binary_anomaly_metrics_without_positive_predictions():
     assert metrics["recall"] == 0.0
 
 
+# --------------------------------------------------------------------------- #
+# RoomNet-MT (multi-task: phòng + hoạt động)
+# --------------------------------------------------------------------------- #
+def test_roomnet_mt_forward_shapes_and_activity_head():
+    import torch
+    from smarthome.models import ACTIVITY_LABELS, RoomNetMT
+
+    torch.manual_seed(42)
+    model = RoomNetMT(in_channels=6, num_rooms=3)
+    x = torch.randn(4, 6, 5)
+    logits, emb, act_logits = model(x)
+
+    assert logits.shape == (4, 3)
+    assert act_logits.shape == (4, len(ACTIVITY_LABELS))
+    assert emb.shape[0] == 4 and emb.shape[1] == 64
+    assert torch.isfinite(logits).all() and torch.isfinite(act_logits).all()
+
+    # Head hoạt động cùng ngưỡng luật: nhãnROOM_CHANGE phải nằm trong bảng.
+    assert list(ACTIVITY_LABELS) == ["STILL", "LIGHT_ACTIVITY", "MOVING", "ROOM_CHANGE"]
+
+
+def test_derive_activity_label_matches_rule_thresholds():
+    from smarthome.models import ACTIVITY_LABELS, derive_activity_label
+
+    idx = {name: i for i, name in enumerate(ACTIVITY_LABELS)}
+    assert derive_activity_label(None, ["A"] * 5) == idx["STILL"]  # thiếu dữ liệu → STILL
+    assert derive_activity_label([float("nan")], ["A"] * 5) == idx["STILL"]
+    assert derive_activity_label([0.5, 0.4, 0.6], ["A"] * 5) == idx["STILL"]
+    assert derive_activity_label([2.0, 2.5], ["A"] * 5) == idx["LIGHT_ACTIVITY"]
+    assert derive_activity_label([5.0, 6.0, 4.5], ["A"] * 5) == idx["MOVING"]
+    assert derive_activity_label([0.1], ["A", "A", "B", "B", "A"]) == idx["ROOM_CHANGE"]
+
+
+def test_mt_dataset_activity_labels_follow_rule_thresholds():
+    import torch
+    from smarthome.dataset import RoomWindowDatasetMT
+    from smarthome.models import ACTIVITY_LABELS
+
+    idx = {name: i for i, name in enumerate(ACTIVITY_LABELS)}
+    rows = []
+    t0 = 1000.0
+    for i in range(6):  # STILL: mọi AP dao động nhẹ
+        rows.append({"timestamp": t0 + i, "session_id": "S1", "device_id": "D", "room": "A",
+                     "AP1": -50.0 + (0.5 if i % 2 else 0.0), "AP2": -70.0 + (0.5 if i % 2 else 0.0)})
+    for i in range(6):  # MOVING: đa số AP dao động mạnh
+        rows.append({"timestamp": t0 + i, "session_id": "S2", "device_id": "D", "room": "A",
+                     "AP1": -50.0 + (6.0 if i % 2 else 0.0), "AP2": -70.0 + (6.0 if i % 2 else 0.0)})
+    for i in range(6):  # ROOM_CHANGE: đổi phòng giữa phiên
+        rows.append({"timestamp": t0 + i, "session_id": "S3", "device_id": "D",
+                     "room": "A" if i < 3 else "B", "AP1": -50.0, "AP2": -70.0})
+    df = pd.DataFrame(rows)
+    pp = RSSIPreprocessor.fit(df)
+    ds = RoomWindowDatasetMT(df, pp, ["A", "B"], window_size=5)
+
+    # Mỗi session 6 scan, window 5 → 2 cửa sổ; thứ tự group: S1, S2, S3.
+    labels = [int(activity) for _x, _y, _stable, activity in ds]
+    assert len(labels) == 6
+    assert labels[0:2] == [idx["STILL"]] * 2
+    assert labels[2:4] == [idx["MOVING"]] * 2
+    assert labels[4:6] == [idx["ROOM_CHANGE"]] * 2
+
+    # Tensor trả về đúng kiểu để DataLoader xếp batch.
+    x, y, stable, activity = ds[0]
+    assert isinstance(x, torch.Tensor) and x.dim() == 2
+    assert y.dtype == torch.long and activity.dtype == torch.long and stable.dtype == torch.float32
+
+
 def test_inference_engine_predicts_normalised_posterior_after_window():
     cfg = load_config(ROOT / "config.yaml")
     engine = SmartHomeInferenceEngine(cfg, ROOT / "models")

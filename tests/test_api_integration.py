@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import sys
 from pathlib import Path
 
@@ -232,6 +233,108 @@ def test_reset_clears_runtime_state_but_keeps_rows(client):
     assert response.get_json()["persistent_data_kept"] is True
     assert client.get("/api/status").get_json()["room"] is None
     assert appmod.db.prediction_history(home_id, 100), "reset must not delete stored predictions"
+
+
+def _read_stream_events(response, expected, max_chunks=10):
+    """Đọc các block SSE cho tới khi thấy đủ tên event cần thiết."""
+    buffer = ""
+    events = {}
+    iterator = iter(response.response)
+    for _ in range(max_chunks):
+        chunk = next(iterator)
+        buffer += chunk.decode("utf-8") if isinstance(chunk, bytes) else chunk
+        while "\n\n" in buffer:
+            block, buffer = buffer.split("\n\n", 1)
+            name = None
+            data = []
+            for line in block.splitlines():
+                if line.startswith("event:"):
+                    name = line.split(":", 1)[1].strip()
+                elif line.startswith("data:"):
+                    data.append(line.split(":", 1)[1].lstrip())
+            if name:
+                events[name] = "\n".join(data)
+        if all(name in events for name in expected):
+            break
+    return events
+
+
+def test_stream_requires_login(client):
+    response = client.get("/api/stream")
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "AUTH_REQUIRED"
+
+
+def test_stream_emits_initial_dashboard_events(client):
+    register(client, "stream@example.com")
+    home = client.get("/api/auth/me").get_json()["active_home"]
+    response = client.get("/api/stream", buffered=False)
+    try:
+        assert response.status_code == 200
+        assert response.mimetype == "text/event-stream"
+        assert response.headers["Cache-Control"] == "no-cache, no-store"
+        assert response.headers["X-Accel-Buffering"] == "no"
+        events = _read_stream_events(response, {"status", "history", "alerts"})
+    finally:
+        response.close()
+
+    assert set(events) == {"status", "history", "alerts"}
+    status = json.loads(events["status"])
+    assert status["status"] == "NO_DATA"
+    assert status["home"]["id"] == home["id"]
+    assert json.loads(events["history"]) == []
+    assert json.loads(events["alerts"]) == []
+
+
+def test_dashboard_stream_pushes_only_changed_status(client, monkeypatch):
+    register(client, "stream2@example.com")
+    home = client.get("/api/auth/me").get_json()["active_home"]
+
+    import routes.track_views as track_views
+    monkeypatch.setattr(track_views, "STREAM_INTERVAL_SECONDS", 0)
+    user_id = client.get("/api/auth/me").get_json()["user"]["id"]
+    generator = track_views._dashboard_stream(home, user_id)
+    try:
+        assert "event: status" in next(generator)
+        assert "event: history" in next(generator)
+        assert "event: alerts" in next(generator)
+
+        appmod.persist_result(home["id"], {"room": "Bedroom", "status": "NORMAL", "timestamp": 10.0})
+        changed = next(generator)
+    finally:
+        generator.close()
+
+    assert "event: status" in changed
+    assert '"room":"Bedroom"' in changed
+
+
+def test_stream_stops_after_member_access_is_revoked(client, monkeypatch):
+    register(client, "stream-owner@example.com", "Nhà Chủ")
+    home_id = client.get("/api/auth/me").get_json()["active_home"]["id"]
+    code = create_share(client, home_id)
+
+    client.post("/api/auth/logout")
+    register(client, "stream-member@example.com", "Nhà Thành Viên")
+    assert client.post("/api/homes/join", json={"code": code}).status_code == 200
+    assert client.post(f"/api/homes/{home_id}/select").status_code == 200
+    me = client.get("/api/auth/me").get_json()
+    home = me["active_home"]
+    user_id = me["user"]["id"]
+
+    import routes.track_views as track_views
+    monkeypatch.setattr(track_views, "STREAM_INTERVAL_SECONDS", 0)
+    generator = track_views._dashboard_stream(home, user_id)
+    try:
+        next(generator)
+        next(generator)
+        next(generator)
+        appmod.db.remove_home_member(home_id, user_id)
+        revoked = next(generator)
+    finally:
+        generator.close()
+
+    assert "event: auth" in revoked
+    assert "HOME_ACCESS_REVOKED" in revoked
 
 
 def test_sensor_endpoint_rejects_non_finite_samples(client):

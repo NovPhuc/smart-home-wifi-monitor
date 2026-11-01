@@ -4,18 +4,29 @@
  * (dữ liệu cảm biến không bao giờ được phục vụ từ cache).
  *
  * Sửa so với bản cũ:
- *  - APP_SHELL trỏ tới /static/app.js (ba file app*.js đã gộp thành một).
+ *  - APP_SHELL liệt kê app.js (entry) và toàn bộ module trong js/ để trang vẫn
+ *    mở được khi offline; app.js chỉ còn là entry import ./js/main.js.
  *  - Chỉ ghi cache khi phản hồi hợp lệ; bản cũ cache cả 404/500.
  *  - Chỉ trả về trang chủ khi điều hướng thất bại. Bản cũ trả HTML cho mọi
  *    request lỗi, kể cả CSS/JS — trình duyệt nhận HTML thay cho script.
  */
-const CACHE_NAME = 'an-tam-home-v5';
+const CACHE_NAME = 'an-tam-home-v6';
 const APP_SHELL = [
   '/',
   '/static/style.css',
   '/static/mobile.css',
   '/static/account.css',
   '/static/app.js',
+  '/static/js/core.js',
+  '/static/js/auth.js',
+  '/static/js/dashboard.js',
+  '/static/js/settings.js',
+  '/static/js/monitoring.js',
+  '/static/js/demo.js',
+  '/static/js/sensor.js',
+  '/static/js/training.js',
+  '/static/js/share.js',
+  '/static/js/main.js',
   '/static/manifest.webmanifest',
   '/static/icons/app-icon.svg'
 ];

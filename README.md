@@ -111,6 +111,7 @@ Android WiFi Collector / Demo fingerprints
 | `GET` | `/api/status` | Vị trí, vận động, tín hiệu và mức an toàn hiện tại |
 | `GET` | `/api/history` | Dòng thời gian dự đoán |
 | `GET` | `/api/alerts` | Danh sách cảnh báo |
+| `GET` | `/api/stream` | SSE realtime: đẩy `status`, `history`, `alerts`; dashboard tự fallback về polling nếu stream lỗi |
 | `POST` | `/api/demo/scan` | Phát một fingerprint mẫu; có thể truyền `{ "room": "Kitchen" }` |
 | `GET` | `/api/config` | Danh sách phòng và topology công khai |
 | `GET` | `/api/metrics` | Accuracy, F1, Precision/Recall, độ trễ và baseline |
@@ -124,8 +125,11 @@ Android WiFi Collector / Demo fingerprints
 - **HTTPS:** đặt `SMART_HOME_SSL_CERT` + `SMART_HOME_SSL_KEY`; khi đó cookie session tự bật `Secure` và server gửi HSTS. Chạy HTTP trong LAN thì không gửi HSTS (tránh trình duyệt ghi nhớ nhầm).
 - **Session:** cookie tên `session`, `HttpOnly`, `SameSite=Lax`. Không đổi tên cookie vì Android Collector lưu/khôi phục phiên theo tên này.
 - **Rate limit:** chỉ áp lên `/api/*` (dashboard/static không bị chặn). Vượt ngưỡng trả `429` kèm `Retry-After`. Nếu server nằm sau reverse proxy tin cậy, đặt `SMART_HOME_TRUST_PROXY=1` để dùng `X-Forwarded-For`; **không bật** khi client kết nối trực tiếp, nếu không client tự giả header sẽ vượt được giới hạn.
+- **Realtime:** dashboard mở `EventSource('/api/stream')`; máy chủ chỉ đẩy event khi dữ liệu đổi, gửi heartbeat 15 giây và giới hạn 32 kết nối. Stream kiểm tra lại quyền xem mỗi 2 giây nên thành viên bị gỡ sẽ mất kết nối. Nếu SSE lỗi, dashboard tự quay về polling 3 endpoint như cũ.
+- **Giao diện:** `server/static/app.js` chỉ là entry; các phần xác thực, dashboard, SSE, phòng/thiết bị, demo, cảm biến, huấn luyện và chia sẻ nằm trong `server/static/js/`. Không cần bước build; service worker cache `an-tam-home-v6` chứa đủ module.
 - **Ghi dữ liệu:** mọi `POST/PUT/PATCH/DELETE` có body phải gửi `Content-Type: application/json` (lớp phòng thủ CSRF thứ hai). Các POST không body như `/api/auth/logout`, `/api/reset`, `/api/training/start` vẫn hợp lệ.
 - **Lỗi API:** luôn trả JSON `{"error": "...", "message": "..."}` cho `/api/*`, kể cả 400/404/413/500.
+- **Webhook cảnh báo:** đặt `alerts.webhook_url` trong `config.yaml` để nhận POST JSON khi có cảnh báo `CRITICAL` (timeout 5 giây, không theo redirect). Để trống thì tắt.
 - **Android:** `android:allowBackup="false"` để session cookie/token không bị lôi ra qua backup ADB hoặc cloud backup.
 
 ## Thu dữ liệu thật bằng Android

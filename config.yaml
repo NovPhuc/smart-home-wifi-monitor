@@ -86,8 +86,9 @@ mobile_sensor:
 
 alerts:
   repeat_cooldown_seconds: 600
-  # Webhook ngoài cho cảnh báo CRITICAL (Telegram/IFTTT/ntfy.sh...).
-  # Để trống thì tắt. Ví dụ: https://ntfy.sh/ten-kenh-rieng-cua-ban
+  # Webhook JSON cho cảnh báo CRITICAL. Server POST body dạng:
+  # {event, home_id, home, status, room, reasons, timestamp}.
+  # Để trống thì tắt; tự viết endpoint nhận JSON hoặc dùng adapter phù hợp.
   webhook_url: ""
 
 calibration:

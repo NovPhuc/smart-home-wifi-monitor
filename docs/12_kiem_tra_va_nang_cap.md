@@ -3,7 +3,9 @@
 Ngày: 2026-11-01
 Nhánh: `fix/optimize-training`
 Phạm vi: tầng Flask (`server/`), dashboard PWA (`server/static/`), Android manifest, test hồi quy.
-Không sửa dữ liệu gốc, không đổi đường dẫn API/tên trường JSON, không commit.
+Không sửa dữ liệu gốc, không đổi đường dẫn API/tên trường JSON. Phiên này **không chạy
+`git commit`**; trong lúc làm việc, một tiến trình khác đã tạo commit `360eb59` chứa
+phần lớn thay đổi bên dưới (xem mục 5).
 
 ## 1. Hiện trạng trước khi sửa
 
@@ -127,4 +129,8 @@ Các bước đã chạy qua HTTP thật:
 - **G1/G2/G3/G4 của kế hoạch viết lại vẫn dở.** Phiên này chỉ hoàn thiện phần
   bảo mật + vá lỗi cô lập dữ liệu + nâng cấp nhỏ; chưa làm SSE, tách `app.js`,
   multi-task/ensemble hay sinh lại báo cáo.
-- **Chưa commit.** Toàn bộ thay đổi vẫn ở working tree, chờ người dùng duyệt.
+- **Trạng thái git:** commit `360eb59` (message "Phien 9-G1…") đã được tạo bởi
+  một tiến trình khác trong lúc phiên này đang chạy, chứa phần lớn thay đổi code.
+  Phiên này không chạy `git commit`/`git push`. Sau commit, working tree chỉ còn
+  `PROGRESS.md` (mục phiên 10) và bản cập nhật của chính tài liệu này; chờ người
+  dùng duyệt trước khi làm gì thêm với git.

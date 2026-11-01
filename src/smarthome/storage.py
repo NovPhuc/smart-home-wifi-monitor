@@ -9,6 +9,8 @@ import sqlite3
 import time
 import unicodedata
 
+from .ap_hashing import wifi_hash as _wifi_hash
+
 
 def _norm_room_name(name: str) -> str:
     """Chuẩn hóa tên phòng để tìm kiếm không phân biệt kiểu chữ và dấu.

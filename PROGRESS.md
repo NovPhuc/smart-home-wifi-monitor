@@ -190,6 +190,57 @@ Ghi nhận, không sửa (có lý do):
 
 Kiểm chứng cuối: `pytest tests -q` **50/50 pass**; chạy thật server (DB tạm, không đụng `data/smarthome.db`) + Playwright như trên; server đã dừng, DB tạm đã xóa.
 
+## Phiên 10 (2026-11-01): kiểm tra bảo mật + vá lỗi cô lập dữ liệu + nâng cấp nhỏ
+
+Báo cáo đầy đủ: `docs/12_kiem_tra_va_nang_cap.md`. Không commit.
+
+### Hiện trạng đầu phiên
+- `pytest tests -q`: **4 failed, 47 passed**. Nguyên nhân: `server/app_services.py`
+  import `db`, `home_engines`, `last_results`, `alert_throttle` theo giá trị từ
+  `app_state`; fixture đổi `app_state.db` nhưng route vẫn dùng DB cũ. Đây là lỗi
+  cô lập dữ liệu (test có thể đọc/ghi nhầm `data/smarthome.db`), không chỉ lỗi test.
+- `server/security_middleware.py` cũ (từ checkpoint trước) rate-limit cả trang/static
+  và tin `X-Forwarded-For` vô điều kiện; bản refactor G1 đã bỏ middleware này.
+
+### Đã làm
+1. `app_services.py`: chuyển sang `import app_state`, truy cập động; thêm
+   `finite_float()`, `notify_alert()`, `_post_webhook()`; `persist_result()` nhận
+   `home_name`. `app.py` thêm `__getattr__` để `appmod.db`/`appmod.persist_result`
+   vẫn tương thích nhưng luôn trỏ đúng trạng thái hiện tại.
+2. Viết lại `security_middleware.py`: chỉ rate-limit `/api/*`; ngưỡng auth 30/phút,
+   collect/scan/sensor 240/phút, API chung 300/phút; block 60 giây; lock + trần
+   4096 client; chỉ tin XFF khi `SMART_HOME_TRUST_PROXY=1`; guard `view_args=None`;
+   JSON-only cho thao tác ghi có body; `Permissions-Policy` cho phép
+   accelerometer/gyroscope; HSTS chỉ khi HTTPS; `Cache-Control: no-store` cho API;
+   lỗi API trả JSON.
+3. `app.py`: nối middleware, thêm `GET /api/health` (503 khi DB lỗi).
+4. Validate `max_dwell_minutes` (1–1440, hữu hạn), RSSI/timestamp hữu hạn, cap
+   `platform` 40 ký tự, cap `orientation`/`device_id`.
+5. Webhook CRITICAL: gửi thread nền, timeout 5 giây, không redirect; dùng cho cả
+   cảnh báo Wi-Fi và cảm biến.
+6. UI: nút **Đổi tên phòng** (PATCH giữ nguyên `max_dwell_minutes`); bump service
+   worker cache `an-tam-home-v5`.
+7. Android: `android:allowBackup="false"`.
+8. Test: fixture reset rate limit; thêm 12 test hồi quy.
+9. Docs: `README.md`, `.env.example`, `docs/12_kiem_tra_va_nang_cap.md`.
+
+### Kiểm chứng thật
+- `pytest tests -q`: **63 passed**.
+- `py_compile` toàn bộ `server/*.py` + `server/routes/*.py`: OK.
+- `node --check server/static/app.js` và `service-worker.js`: OK.
+- Chạy server thật với DB tạm: health, 404 JSON, header, đăng ký, tạo/đổi tên
+  phòng, NaN → 400, text/plain → 415, reset, 429 + `Retry-After`, trang chủ vẫn
+  200 → **SMOKE OK**. Không đụng `data/smarthome.db` (kiểm tra: 0 alert, 0 prediction).
+
+### Còn lại
+- G1 code đã chạy được. Commit `360eb59` xuất hiện trong lúc phiên này đang chạy
+  (do tiến trình khác tạo, **không phải phiên này**); phiên này không chạy
+  `git commit`/`git push`. G2 (SSE/tách app.js), G3 (multi-task/ensemble), G4
+  (sinh lại báo cáo) vẫn chưa làm.
+- Rate limit trong RAM theo tiến trình; chưa có CSRF token (đang dựa SameSite=Lax +
+  JSON-only + không bật CORS). Không bật `SMART_HOME_TRUST_PROXY` khi client nối
+  trực tiếp.
+
 ## Phiên 9 (2026-10-31): VIẾT LẠI TOÀN BỘ CHỨC NĂNG — ĐANG DỞ, CHƯA XONG
 
 Yêu cầu: "viết lại toàn bộ chức năng" kèm nguyên tắc trong `E:\Downloads\tinhnang.md` (nghiên cứu mã nguồn mở trước khi làm). Đã chọn phạm vi: **tất cả** (tầng app + tầng ML). Checkpoint phiên 8: commit `4e3289e` trên nhánh `fix/optimize-training`.
@@ -228,6 +279,44 @@ Còn lại của G1 (làm tiếp theo đúng thứ tự):
 - `appmod.time` bị monkeypatch (test_serial_share_code_expiry) — app.py phải giữ `import time`.
 - 3 limiter nằm trong `app_state` — fixture phải reset qua `app_state.reset_runtime()`.
 - Không commit khi chưa hỏi; mỗi bước code phải chạy được.
+
+### Cập nhật 2026-11-01: G1 + G2 HOÀN THÀNH (làm song song với agent khác)
+
+Agent khác ("phiên 10", docs/12) đã tiếp quản và hoàn thiện G1: sửa 4 test fail
+(app_services import theo giá trị → `app_state.*` động), viết lại
+`security_middleware.py` (rate limit theo nhóm endpoint, JSON-only guard CSRF
+lớp 2, HSTS chỉ trên HTTPS, Permissions-Policy giữ accelerometer=(self), JSON
+error handler), thêm `/api/health`, `finite_float` chặn NaN/Infinity, webhook
+CRITICAL (đã nối code — config `alerts.webhook_url` giờ có tác dụng), nút đổi
+tên phòng, Android `allowBackup="false"`, service-worker v5.
+
+**G1 xong — commit `360eb59`** (lưu ý: docs/12 ghi "chưa commit chờ duyệt", nhưng
+kế hoạch G1 được duyệt có bước commit; kiểm chứng sống trước khi commit:
+health/register/demo/guard 415/rate-limit 429).
+
+**G2 xong (SSE realtime)**: `/api/stream` với slot giới hạn 32 kết nối, heartbeat
+15s, chỉ gửi event khi payload đổi; app.js client EventSource + fallback polling;
+67/67 test pass. Kiểm chứng sống (DB tạm): 6 giây nhận `status, history, alerts,
+status`; REST vẫn chạy song song; `node --check` OK.
+
+Phân công tiếp (tránh hai agent đụng cùng file):
+- **GLM (phiên này) — G3 tầng ML**: `src/smarthome/models.py`, `scripts/train_*.py`,
+  `config.yaml` (mục ML), pipeline chạy lại, `results/` mới. File server/frontend
+  KHÔNG đụng tới khi agent khác còn hoạt động.
+- Agent khác (nếu tiếp tục): G2 còn dư — tách `app.js` thành ES modules (1113
+  dòng), và G4 (báo cáo + README sau khi G3 có số liệu).
+
+### G3 — thiết kế chi tiết (bắt đầu ngay dưới đây)
+Mục tiêu theo nghiên cứu mã nguồn mở (ARIL IEEE Access 2019 + FIND3):
+1. **Multi-task RoomNet-MT**: 1 encoder dùng chung + 2 head (phòng + hoạt động)
+   — tham khảo ý tưởng joint learning của ARIL, giữ loss có trọng số.
+2. **Ensemble meta-learning kiểu FIND3**: huấn luyện N model (RoomNetLite hiện
+   tại + biến thể + baseline CNN/kNN/RF), chọn model tốt nhất THEO TỪNG NHÀ
+   dựa trên validation session — không bao giờ chọn theo test.
+3. Chạy lại toàn pipeline trên dữ liệu v2, seed 42, ghi `results/g3_multitask/`;
+   so sánh trước/sau công khai trong báo cáo; KHÔNG bịa số liệu.
+Ràng buộc: giữ tương thích inference hiện tại (interface SmartHomeInferenceEngine
+không đổisignature), 67 test phải luôn pass.
 
 ## Phiên 8 (2026-10-31): kiểm tra bảo mật + kiểm tra chức năng
 
@@ -273,3 +362,110 @@ Kiểm chứng cuối: `pytest tests -q` **51/51 pass** · `selftest-mcp.js` **2
 
 Khuyến nghị chưa sửa (chờ quyết định): chạy HTTPS trên LAN thay vì HTTP trần (cookie phiên đang đi
 dạng rõ) · tắt mDNS nếu không dùng · thêm lớp chống CSRF thứ hai bằng cách từ chối thân không phải JSON.
+
+## Phiên 11 (2026-11-01): G2 — SSE realtime cho dashboard
+
+Báo cáo đầy đủ: `docs/13_sse_realtime.md`. Không commit.
+
+### Yêu cầu
+Tiếp tục sau G1: dashboard đang gọi 3 request (`/api/status`, `/api/history`,
+`/api/alerts`) mỗi 2 giây. Thay bằng SSE, giữ polling làm fallback; không đổi API
+Android/PWA, không đổi tên cookie phiên, không thêm thư viện.
+
+### Đã làm
+1. `server/routes/track_views.py`:
+   - tách `_status_payload()`, `_history_payload()`, `_alerts_payload()` dùng chung
+     cho REST và SSE;
+   - thêm `GET /api/stream` (`@login_required` + `require_active_home`) trả
+     `text/event-stream`, `Cache-Control: no-cache, no-store`,
+     `X-Accel-Buffering: no`;
+   - event `status`/`history`/`alerts`, chỉ gửi khi payload đổi; status gửi lại
+     mỗi 15 giây; heartbeat 15 giây;
+   - giới hạn 32 stream đồng thời (`BoundedSemaphore`), giải phóng bằng
+     `call_on_close()`; vượt giới hạn trả 503 `TOO_MANY_STREAMS` + `Retry-After`;
+   - mỗi vòng kiểm tra lại `db.get_home(user_id, home_id)`; mất quyền xem thì gửi
+     event `auth` (`HOME_ACCESS_REVOKED`) rồi đóng stream.
+2. `server/static/app.js`:
+   - `startLiveUpdates()` mở `EventSource('/api/stream')` sau đăng nhập và sau mỗi
+     `loadHome()`;
+   - tách `applyStatus()/applyHistory()/applyAlerts()` để SSE và polling dùng chung,
+     vẫn giữ `lastRenderKey` chống vẽ lại;
+   - stream lỗi → đóng EventSource, bật polling fallback, hẹn mở lại SSE sau 15 giây;
+     SSE mở thành công → dừng polling;
+   - `visibilitychange`/`pagehide` đóng stream; event `auth` reload để nạp lại phiên.
+3. `tests/test_api_integration.py`: thêm 4 test SSE (401, event đầu tiên, đẩy status
+   mới, thu hồi quyền thành viên).
+4. `README.md`: thêm `/api/stream` và mục **Realtime** trong bảo mật/vận hành.
+
+### Kiểm chứng thật
+- `pytest tests -q`: **67 passed** (63 + 4 test SSE).
+- `py_compile` các file server đã sửa: OK.
+- `node --check server/static/app.js` và `service-worker.js`: OK.
+- Smoke HTTP thật với DB tạm: health 200, đăng ký 201, SSE không cookie 401, SSE có
+  cookie 200 + đủ 3 event, ghi kết quả mới → SSE đẩy status `Bedroom` trong cùng kết
+  nối, `/api/status` thấy `Bedroom` → **SMOKE OK**.
+- `data/smarthome.db` không bị đụng: **0 alert, 0 prediction**.
+
+### Còn lại
+- G2 phần tách `app.js` thành ES modules **chưa làm**; hiện vẫn một file
+  `server/static/app.js`.
+- G3 (multi-task/ensemble) và G4 (sinh lại báo cáo) chưa làm.
+- Mỗi stream vẫn truy vấn SQLite mỗi 2 giây; nếu số client tăng nhiều nên gom thành
+  broadcaster chung. Giới hạn 32 stream tính theo từng process.
+- Session vẫn là cookie phía client: đăng xuất ở tab khác không đóng ngay stream
+  đang mở. Muốn thu hồi tức thì cần session phía server (`session_epoch`).
+- Không chạy `git commit`/`git push`.
+
+## Phiên 12 (2026-11-01): G2 — tách `app.js` thành ES modules
+
+Báo cáo đầy đủ: `docs/14_frontend_modules.md`. Không commit. Không đụng file G3
+(`src/smarthome/models.py`, `scripts/train_*.py`, phần ML trong `config.yaml`).
+
+### Yêu cầu
+Tiếp nối SSE ở phiên 11: `server/static/app.js` vẫn là một file ~1.100 dòng. Tách
+theo tính năng, giữ nguyên hành vi, đường dẫn `/static/app.js`, ID phần tử và API.
+
+### Đã làm
+1. Tạo `server/static/js/` gồm 10 module: `core`, `auth`, `dashboard`, `settings`,
+   `monitoring`, `demo`, `sensor`, `training`, `share`, `main`.
+   - `core.js`: hằng số, `state`, DOM utils, hiệu ứng, `ApiError`/`api()`, trạng thái nút.
+   - `dashboard.js`: nạp phiên/nhà, SSE + polling fallback, `renderHomes`.
+   - `monitoring.js`: vẽ status/history/alerts/metrics, `refreshDashboard()`.
+   - `settings.js`: phòng, thiết bị, tiến độ hiệu chuẩn.
+   - `demo.js`, `sensor.js`, `training.js`, `share.js`: đúng một nhóm chức năng mỗi file.
+   - `main.js`: gắn sự kiện, đăng ký service worker, boot cho cả hai template.
+2. Tránh vòng import:
+   - `core.js` có registry `registerStop()`/`stopAllActivity()`; `showAuth()` gọi
+     `stopAllActivity()` thay vì import ngược dashboard/demo/training.
+   - `renderRooms(reloadHome)` và `submitAuth(form, endpoint, onSuccess)` nhận callback
+     từ tầng trên.
+3. `server/static/app.js` còn 14 dòng, dùng `import('/static/js/main.js')` **động** để
+   HTML cũ nạp kiểu script thường vẫn không vỡ cú pháp.
+4. `dashboard.html` + `index.html`: script `type="module"`.
+5. `service-worker.js`: cache `an-tam-home-v6`, `APP_SHELL` thêm đủ 10 module.
+6. Docs: `docs/14_frontend_modules.md`; cập nhật `docs/13_sse_realtime.md`
+   (đường dẫn module + service worker v6).
+
+### Lỗi phát hiện khi smoke và đã sửa
+Bấm **Chạy demo** trên trình duyệt thật báo `api is not defined`: `demo.js` thiếu
+`api` trong import từ `core.js`. Đã thêm và chạy lại; demo hoạt động, console sạch.
+`node --check` không bắt được lỗi này vì cú pháp vẫn hợp lệ.
+
+### Kiểm chứng thật
+- `node --input-type=module --check` cho `app.js` + 10 module: **11/11 OK**.
+- Import graph chạy bằng Node với DOM stub: **IMPORT OK** (không vòng import).
+- ESLint 9 `no-undef`/`no-unused-vars`: **0 error, 0 warning**.
+- `pytest tests -q`: **67 passed**.
+- Smoke trình duyệt thật (Flask cổng 5099, DB tạm): tải đủ 10 module HTTP 200;
+  SSE 200 `text/event-stream`; đăng ký, demo (`Bedroom`, 99%), thêm/đổi tên phòng,
+  tạo/thu hồi thiết bị, tạo mã chia sẻ, cảnh báo cảm biến cần HTTPS, đăng xuất/đăng
+  nhập lại — tất cả chạy, không lỗi console mới.
+- Service worker `an-tam-home-v6`: 18 entry, gồm đủ 11 file JS.
+- `index.html` (cổng 5100) tải module, báo `HOME_REQUIRED` đúng nghiệp vụ; HTML cũ
+  nạp `app.js` classic (cổng 5101) vẫn tải `/static/js/main.js`.
+- `data/smarthome.db` không bị đụng: **0 alert, 0 prediction**.
+
+### Còn lại
+- G3 (multi-task/ensemble) do agent GLM phụ trách; G4 (sinh lại báo cáo) chưa làm.
+- Chưa bundle JS: trình duyệt tải 11 file, dựa vào cache service worker.
+- Không chạy `git commit`/`git push`.

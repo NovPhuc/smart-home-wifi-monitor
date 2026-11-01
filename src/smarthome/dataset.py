@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from .preprocessing import RSSIPreprocessor
+from .models.roomnet_mt import ACTIVITY_LABELS, derive_activity_label
 
 
 class RoomWindowDataset(Dataset):
@@ -51,6 +52,76 @@ class RoomWindowDataset(Dataset):
             torch.from_numpy(x),
             torch.tensor(y, dtype=torch.long),
             torch.tensor(stable, dtype=torch.float32),
+        )
+
+
+class RoomWindowDatasetMT(Dataset):
+    """Cửa sổ RSSI + nhãn phòng + nhãn hoạt động (cho RoomNet-MT).
+
+    Nhãn hoạt động suy từ chính cửa sổ bằng cùng ngưỡng ``ActivityMonitor``
+    (median delta giữa các scan liên tiếp; đổi phòng trong cửa sổ →
+    ``ROOM_CHANGE``) — xem ``derive_activity_label``. Không dùng nhãn từ tập
+    test hay thông tin tương lai: mọi thứ tính trong phạm vi cửa sổ.
+    """
+
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        preprocessor: RSSIPreprocessor,
+        rooms: Sequence[str],
+        window_size: int = 5,
+        movement_delta: float = 4.0,
+        still_delta: float = 1.5,
+    ) -> None:
+        self.preprocessor = preprocessor
+        self.rooms = list(rooms)
+        self.room_to_idx = {r: i for i, r in enumerate(self.rooms)}
+        self.window_size = window_size
+        self.samples: list[tuple[np.ndarray, int, float, int]] = []
+
+        required = {"room", "session_id", "device_id", "timestamp"}
+        missing = required - set(df.columns)
+        if missing:
+            raise ValueError(f"Missing columns: {sorted(missing)}")
+
+        work = df.sort_values(["session_id", "device_id", "timestamp"]).copy()
+        work["_features"] = list(preprocessor.transform_frame(work))
+        # Giá trị RSSI thô theo từng AP (thiếu → NaN) để tính delta như bộ luật.
+        ap_columns = [c for c in preprocessor.ap_columns if c in work.columns]
+
+        for _, group in work.groupby(["session_id", "device_id"], sort=False):
+            feats = np.stack(group["_features"].to_list())
+            labels = group["room"].tolist()
+            if len(group) < window_size:
+                continue
+            raw = (
+                group[ap_columns].to_numpy(dtype=np.float32)
+                if ap_columns else np.zeros((len(group), 0), dtype=np.float32)
+            )
+            for end in range(window_size - 1, len(group)):
+                start = end - window_size + 1
+                x = feats[start : end + 1].T  # [features, time]
+                y = self.room_to_idx[labels[end]]
+                stable = float(len(set(labels[start : end + 1])) == 1)
+                window_rooms = labels[start : end + 1]
+                deltas = np.abs(np.diff(raw[start : end + 1], axis=0))
+                per_step = [
+                    float(np.nanmedian(deltas[step])) if np.isfinite(deltas[step]).any() else 0.0
+                    for step in range(deltas.shape[0])
+                ]
+                activity = derive_activity_label(per_step, window_rooms, movement_delta, still_delta)
+                self.samples.append((x.astype(np.float32), y, stable, int(activity)))
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int):
+        x, y, stable, activity = self.samples[idx]
+        return (
+            torch.from_numpy(x),
+            torch.tensor(y, dtype=torch.long),
+            torch.tensor(stable, dtype=torch.float32),
+            torch.tensor(activity, dtype=torch.long),
         )
 
 

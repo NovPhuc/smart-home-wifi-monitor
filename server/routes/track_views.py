@@ -5,6 +5,7 @@ from copy import deepcopy
 import csv
 import io
 import json
+import threading
 import time
 
 from flask import Blueprint, Response, jsonify, request, session as flask_session
@@ -27,6 +28,97 @@ from app_services import (
 from smarthome.metrics import collect_model_metrics
 
 bp = Blueprint("track", __name__)
+
+# SSE: đẩy dữ liệu mỗi 2 giây (cùng nhịp polling cũ), nhưng chỉ gửi event khi
+# payload đổi. Status vẫn được gửi lại mỗi 15 giây để dashboard cập nhật được
+# trạng thái "dữ liệu đã cũ" dù không có scan mới.
+STREAM_INTERVAL_SECONDS = 2.0
+STREAM_HEARTBEAT_SECONDS = 15.0
+# Mỗi kết nối SSE chiếm một thread của Flask. Giới hạn để một tài khoản mở
+# hàng trăm tab không làm cạn thread của máy chủ gia đình.
+MAX_STREAMS = 32
+
+
+class _StreamSlots:
+    """Đếm số kết nối SSE đang mở, có khóa để dùng được từ nhiều thread."""
+
+    def __init__(self, limit: int) -> None:
+        self._slots = threading.BoundedSemaphore(limit)
+
+    def acquire(self) -> bool:
+        return self._slots.acquire(blocking=False)
+
+    def release(self) -> None:
+        self._slots.release()
+
+
+_stream_slots = _StreamSlots(MAX_STREAMS)
+
+
+def _status_payload(home: dict) -> dict:
+    """Dữ liệu của /api/status, dùng chung cho REST và SSE."""
+    with app_state.lock:
+        result = deepcopy(app_state.last_results.get(home["id"], {"status": "NO_DATA", "room": None}))
+        monitor = app_state.sensor_monitors.get(home["id"])
+        sensor = monitor.status() if monitor else None
+    result["home"] = {"id": home["id"], "name": home["name"]}
+    result["calibration"] = home_progress(home["id"])
+    result["mobile_sensor"] = sensor
+    return result
+
+
+def _history_payload(home: dict) -> list:
+    """Dữ liệu của /api/history, dùng chung cho REST và SSE."""
+    persisted = app_state.db.prediction_history(home["id"], 300)
+    with app_state.lock:
+        runtime = list(app_state.runtime_histories.get(home["id"], []))
+    return (persisted + runtime)[-300:]
+
+
+def _alerts_payload(home: dict) -> list:
+    """Dữ liệu của /api/alerts, dùng chung cho REST và SSE."""
+    return app_state.db.list_alerts(home["id"], 100)
+
+
+def _sse_event(name: str, body: str) -> str:
+    return f"event: {name}\ndata: {body}\n\n"
+
+
+def _dashboard_stream(home: dict, user_id: int):
+    """Sinh event SSE cho một căn nhà cho tới khi client đóng kết nối.
+
+    Không dùng ``stream_with_context`` vì generator chỉ đọc ``app_state`` và
+    dữ liệu đã được chụp lại trong ``home``; giữ request context suốt 2 giây
+    mỗi vòng là không cần thiết.
+    """
+    previous: dict[str, str] = {}
+    last_status_at = 0.0
+    last_heartbeat = time.monotonic()
+    while True:
+        # Quyền xem có thể bị thu hồi sau khi stream đã mở (chủ nhà gỡ thành
+        # viên). Polling cũ phát hiện trong 2 giây; SSE phải kiểm tra lại,
+        # nếu không thành viên đã bị gỡ vẫn nhận dữ liệu mãi.
+        if app_state.db.get_home(user_id, home["id"]) is None:
+            yield _sse_event("auth", '{"error":"HOME_ACCESS_REVOKED"}')
+            return
+        now = time.monotonic()
+        payloads = {
+            "status": _status_payload(home),
+            "history": _history_payload(home),
+            "alerts": _alerts_payload(home),
+        }
+        for name in ("status", "history", "alerts"):
+            body = json.dumps(payloads[name], ensure_ascii=False, separators=(",", ":"))
+            force_status = name == "status" and now - last_status_at >= STREAM_HEARTBEAT_SECONDS
+            if force_status or previous.get(name) != body:
+                yield _sse_event(name, body)
+                previous[name] = body
+                if name == "status":
+                    last_status_at = now
+        if now - last_heartbeat >= STREAM_HEARTBEAT_SECONDS:
+            yield ": heartbeat\n\n"
+            last_heartbeat = now
+        time.sleep(STREAM_INTERVAL_SECONDS)
 
 
 @bp.get("/api/calibration")
@@ -175,12 +267,32 @@ def status():
     home, error = require_active_home()
     if error:
         return error
-    result = deepcopy(app_state.last_results.get(home["id"], {"status": "NO_DATA", "room": None}))
-    result["home"] = {"id": home["id"], "name": home["name"]}
-    result["calibration"] = home_progress(home["id"])
-    monitor = app_state.sensor_monitors.get(home["id"])
-    result["mobile_sensor"] = monitor.status() if monitor else None
-    return jsonify(result)
+    return jsonify(_status_payload(home))
+
+
+@bp.get("/api/stream")
+@login_required
+def stream():
+    """Server-Sent Events: đẩy status/history/alerts thay cho polling 3 request."""
+    home, error = require_active_home()
+    if error:
+        return error
+    if not _stream_slots.acquire():
+        response = jsonify({
+            "error": "TOO_MANY_STREAMS",
+            "message": "Quá nhiều kết nối realtime, vui lòng thử lại sau",
+        })
+        response.status_code = 503
+        response.headers["Retry-After"] = "30"
+        return response
+    response = Response(_dashboard_stream(home, int(flask_session["user_id"])), mimetype="text/event-stream")
+    response.headers["Cache-Control"] = "no-cache, no-store"
+    # Reverse proxy (nginx) mặc định gom response; tắt để event tới ngay.
+    response.headers["X-Accel-Buffering"] = "no"
+    response.headers["Connection"] = "keep-alive"
+    # call_on_close chạy cả khi client ngắt giữa chừng, nên không rò slot.
+    response.call_on_close(_stream_slots.release)
+    return response
 
 
 @bp.get("/api/history")
@@ -189,9 +301,7 @@ def history():
     home, error = require_active_home()
     if error:
         return error
-    persisted = app_state.db.prediction_history(home["id"], 300)
-    runtime = list(app_state.runtime_histories.get(home["id"], []))
-    return jsonify((persisted + runtime)[-300:])
+    return jsonify(_history_payload(home))
 
 
 @bp.get("/api/alerts")
@@ -200,7 +310,7 @@ def alerts():
     home, error = require_active_home()
     if error:
         return error
-    return jsonify(app_state.db.list_alerts(home["id"], 100))
+    return jsonify(_alerts_payload(home))
 
 
 @bp.get("/api/config")
