@@ -5,6 +5,7 @@ import io
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -678,3 +679,57 @@ def test_health_reports_degraded_when_database_is_unavailable(client):
         appmod.app_state.db = original
     assert response.status_code == 503
     assert response.get_json()["database"] == "error"
+
+
+def test_expired_session_is_rejected(client):
+    """Cookie chỉ được ký chứ không có hạn server-side: nếu không kiểm tra
+    tuổi phiên, cookie bị chụp lại dùng được mãi. Quá hạn phải bị xoá."""
+    register(client, "expire@example.com")
+    assert client.get("/api/auth/me").status_code == 200
+
+    # Giả lập cookie được cấp phát 8 ngày trước — quá hạn 7 ngày mặc định.
+    with client.session_transaction() as session:
+        session["_iat"] = time.time() - 8 * 24 * 3600
+    assert client.get("/api/auth/me").status_code == 401
+
+    # Phiên thiếu dấu _iat (cookie cũ trước khi có cơ chế này) cũng bị từ chối.
+    with client.session_transaction() as session:
+        session.clear()
+        session["user_id"] = 999
+    response = client.get("/api/auth/me")
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "AUTH_REQUIRED"
+
+    # Đăng nhập lại cấp phiên mới, dùng được ngay.
+    login_as(client, "expire@example.com")
+    assert client.get("/api/auth/me").status_code == 200
+
+
+def test_csv_export_header_neutralizes_formula_in_ap_name(client):
+    """Tên AP do client tự gửi lọt qua /api/collect (chỉ cắt 64 ký tự); nếu
+    dòng header không vệ sinh như giá trị ô thì '=HYPERLINK(...)' sẽ chạy
+    công thức khi chủ nhà mở file export bằng Excel."""
+    register(client, "csvhead@example.com")
+    create_rooms(client, ["Phòng ngủ", "Phòng khách"])
+    device = client.post("/api/devices", json={"name": "Pixel", "platform": "android"})
+    token = device.get_json()["token"]
+    assert client.post(
+        "/api/collect",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "wifi": {'=HYPERLINK("http://evil","x")': -50.0},
+            "room": "Phòng ngủ",
+            "session_id": "S01",
+            "orientation": "FLAT_UP",
+            "timestamp": 1000.0,
+        },
+    ).status_code == 200
+
+    exported = client.get("/api/export/scans.csv")
+    assert exported.status_code == 200
+    header = exported.get_data(as_text=True).splitlines()[0]
+    assert "'=HYPERLINK" in header, "header phải được vệ sinh như giá trị ô"
+    # Giá trị dòng dữ liệu vẫn map đúng vào cột đã đổi tên.
+    rows = list(csv.DictReader(io.StringIO(exported.get_data(as_text=True))))
+    assert len(rows) == 1
+    assert rows[0]["'=HYPERLINK(\"http://evil\",\"x\")"] == "-50.0"

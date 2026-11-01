@@ -355,7 +355,8 @@ def test_db_cascade_delete_removes_dependent_rows(tmp_path):
             # `homes` keys on `id`; every dependent table keys on `home_id`.
             key = "id" if table == "homes" else "home_id"
             count = connection.execute(
-                f"SELECT COUNT(*) FROM {table} WHERE {key}=?", (home["id"],)
+                # table/key đến từ tuple cố định trong test, không phải input.
+                f"SELECT COUNT(*) FROM {table} WHERE {key}=?", (home["id"],)  # nosec — bảng cố định trong test
             ).fetchone()[0]
             assert count == 0, f"{table} still holds {count} orphan rows"
 

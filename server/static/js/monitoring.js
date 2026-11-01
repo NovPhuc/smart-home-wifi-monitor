@@ -121,7 +121,9 @@ function renderHistory(history) {
 }
 
 function renderAlerts(alerts) {
-  setField($('alertCount'), alerts.length);
+  const countBadge = $('alertCount');
+  setField(countBadge, alerts.length);
+  if (countBadge) countBadge.classList.toggle('has-pending', alerts.length > 0);
   const box = $('alertsList');
   if (!box) return;
   // Chỉ mục mới nhất được đánh dấu is-new: cảnh báo ập tới thì chỉ nó chuyển

@@ -1,6 +1,6 @@
 # Security Audit & Code Review Report
 **Project:** An Tâm Home (v2310)
-**Date:** 2026-11-01 18:52:58
+**Date:** 2026-11-01 20:27:54
 **Root:** `E:\Downloads\smart-home-wifi-monitor2310\smart-home-wifi-monitor`
 
 ## Summary
@@ -8,11 +8,11 @@
 | Severity | Count |
 |----------|-------|
 | CRITICAL | 0 |
-| HIGH | 1 |
+| HIGH | 0 |
 | MEDIUM | 0 |
 | LOW | 0 |
 | INFO | 4 |
-| **Total** | **5** |
+| **Total** | **4** |
 
 
 ## CONFIG (1 findings)
@@ -34,19 +34,6 @@
 pin-set expiration="2027-11-01"
 ```
 - **Recommendation:** Ensure pins are rotated before expiration
-
-## INJECTION (1 findings)
-
-### 🟠 [HIGH] Potential SQL Injection: Possible f-string SQL injection
-- **Category:** INJECTION
-- **File:** `tests\test_algorithms.py`:358
-- **CWE:** [CWE-89](https://cwe.mitre.org/data/definitions/89.html)
-- **Description:** Line uses pattern that may lead to SQL injection.
-- **Code:**
-```
-f"SELECT COUNT(*) FROM {table} WHERE {key}=?", (home["id"],)
-```
-- **Recommendation:** Use parameterized queries: cursor.execute('SELECT * FROM t WHERE id=?', (id,))
 
 ## NETWORK (2 findings)
 

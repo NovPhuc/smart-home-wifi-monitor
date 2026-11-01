@@ -549,6 +549,13 @@ class Auditor:
 
 
 def main():
+    # Console Windows mặc định cp1252 không in được emoji — ép UTF-8.
+    import io
+    import sys as _sys
+    if _sys.stdout.encoding and _sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+        _sys.stdout = io.TextIOWrapper(_sys.stdout.buffer, encoding="utf-8", errors="replace")
+        _sys.stderr = io.TextIOWrapper(_sys.stderr.buffer, encoding="utf-8", errors="replace")
+
     auditor = Auditor()
     auditor.run_all()
     report = auditor.generate_report()
