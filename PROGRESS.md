@@ -508,3 +508,47 @@ Bấm **Chạy demo** trên trình duyệt thật báo `api is not defined`: `de
 - G3 (multi-task/ensemble) do agent GLM phụ trách; G4 (sinh lại báo cáo) chưa làm.
 - Chưa bundle JS: trình duyệt tải 11 file, dựa vào cache service worker.
 - Không chạy `git commit`/`git push`.
+
+## Phiên 10 (2026-11-01): vá lỗ hổng cert pinning Android + kiểm chứng lại toàn bộ
+
+Báo cáo: `docs/11_kiem_tra_bao_mat.md` (mục 7-9).
+
+**Lỗ hổng NGHIÊM TRỌNG đã vá — cert pinning của app Android tự vô hiệu hoá xác thực TLS.**
+`CertificatePinner` tự viết một `X509TrustManager` và cài đè lên mặc định của Android, nhưng
+`checkServerTrusted` **không hề xác thực chuỗi chứng chỉ tới root tin cậy** — nó chỉ kiểm tra
+ngày hết hạn và (khi có pin) kiểm tra pin. Đồng thời `HostnameVerifier` trả về `true` ngay khi
+chưa có pin, nên **kiểm tra tên miền cũng bị tắt**.
+
+`res/raw/cert_pins.txt` chỉ chứa dòng chú thích ⇒ danh sách pin rỗng ⇒ **đúng nhánh fail-open
+là nhánh đang chạy trong bản build thật**. Hệ quả: mọi kết nối `https://` của app chấp nhận
+chứng chỉ bất kỳ và tên miền bất kỳ; kẻ tấn công cùng mạng đọc được email + mật khẩu đăng nhập
+và token thiết bị. Nếu không viết code pinning nào thì Android vẫn kiểm tra chuỗi bình thường —
+tức tính năng "bảo mật" này tự tạo ra lỗ hổng.
+
+Đã sửa: uỷ thác xác thực chuỗi cho `TrustManagerFactory` mặc định trước rồi mới áp pin;
+`getAcceptedIssuers` trả issuers thật; `pinnedSslContext()` trả **null** khi chưa cấu hình pin
+để bên gọi giữ mặc định của Android; `verifyHostname()` luôn chạy
+`HttpsURLConnection.getDefaultHostnameVerifier()` trước. Kiểm chứng: `gradlew assembleDebug`
+**BUILD SUCCESSFUL in 52s**.
+
+**Kiểm chứng lại toàn bộ sau khi phiên 9 tách `app.py` thành module:**
+- `scripts/security_sweep.py` (mới): quét **39 tổ hợp / 34 route `/api/*`** bằng cách gọi không
+  kèm phiên đăng nhập, và gọi thêm một lần với bearer token sai — **0 endpoint hở**. Rủi ro lớn
+  nhất của việc tách blueprint là mất `@login_required` âm thầm; nay đã có lưới chặn hồi quy.
+- Các lớp middleware mới đã kiểm chứng sống: rate limit chặn đúng ở request thứ 31 (nhóm auth
+  30/60s); **`X-Forwarded-For` không được tin** (35 request với XFF đổi liên tục vẫn bị chặn —
+  chỉ tin khi `SMART_HOME_TRUST_PROXY=1`); body không phải JSON trả **415** (lớp CSRF thứ hai);
+  HSTS chỉ gửi khi HTTPS; lỗi API trả JSON không lộ traceback.
+- `pytest tests -q` → **79 passed**; `selftest-mcp.js` → **28/28**; `security-probe.js` → **0/12**.
+
+**Sửa môi trường build Android** (lỗi có sẵn, không do bản vá): `gradle.properties` ghim JDK vào
+đường dẫn Android Studio không còn tồn tại → bỏ dòng ghim, dùng `JAVA_HOME`; `local.properties`
+trỏ `sdk.dir` vào `E:\Android` (chỉ là thư mục Android Studio) → trỏ về SDK thật ở
+`%LOCALAPPDATA%\Android\Sdk`.
+
+**Ghi nhận (chưa sửa):** `security_middleware` lọc SQLi/XSS bằng regex trên query/path — không
+phải biện pháp bảo vệ (regex danh sách đen luôn bypass được, và không chạm tới JSON body nơi tên
+phòng/tên nhà thực sự nằm); hàng rào thật vẫn là truy vấn tham số hoá + Jinja escape, cả hai đều
+đã có. Cần lưu ý rủi ro chặn nhầm nếu sau này có endpoint nhận chuỗi tự do qua query string.
+`torch.load`/`joblib.load` khi nạp model là vector RCE cổ điển nếu file không đáng tin — ở đây
+file do chính pipeline sinh ra nên rủi ro thấp; có thể siết thêm bằng `weights_only=True`.

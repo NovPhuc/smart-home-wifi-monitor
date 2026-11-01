@@ -27,6 +27,7 @@ import java.net.CookiePolicy
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
@@ -34,6 +35,7 @@ import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSession
+import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 import kotlin.concurrent.thread
 import kotlin.math.abs
@@ -49,8 +51,17 @@ import kotlin.math.abs
  * "sha256/<base64 SPKI>"). Sinh pin bằng:
  *   openssl x509 -in cert.pem -pubkey -noout | openssl pkey -pubin -outform DER \
  *     | openssl dgst -sha256 -binary | base64
- * Chưa có file/chưa ghim thì dùng trust store hệ thống (vẫn kiểm tra chuỗi
- * chứng chỉ chuẩn) — ghim là lớp tăng cường, không phải điều kiện chạy.
+ *
+ * QUAN TRỌNG — ghim là lớp TĂNG CƯỜNG, không thay thế việc xác thực chuỗi
+ * chứng chỉ. TrustManager tự viết ở đây luôn uỷ thác cho TrustManager mặc định
+ * của hệ thống trước, rồi mới kiểm tra pin. Khi chưa điền pin (đúng trạng thái
+ * mặc định của res/raw/cert_pins.txt), pinnedSslContext() trả về null để bên
+ * gọi giữ nguyên cấu hình mặc định của Android.
+ *
+ * Bản trước đây luôn cài một TrustManager chỉ kiểm tra hạn dùng chứng chỉ và
+ * chỉ kiểm tra pin khi có pin — nghĩa là ở trạng thái mặc định, app chấp nhận
+ * MỌI chứng chỉ tự ký, và HostnameVerifier trả về true cho mọi tên miền. Cả
+ * hai đều bị vá ở đây.
  */
 object CertificatePinner {
     private const val TAG = "CertificatePinner"
@@ -72,34 +83,58 @@ object CertificatePinner {
         return "sha256/" + android.util.Base64.encodeToString(digest, android.util.Base64.NO_WRAP)
     }
 
-    fun isPinned(hostname: String, session: SSLSession, context: Context?): Boolean {
-        val pins = loadPins(context)
-        if (pins.isEmpty()) return true // chưa cấu hình pin -> chỉ dùng trust hệ thống
-        val peer = session.peerCertificates
-        if (peer.isNullOrEmpty()) return false
-        return peer.any { it is X509Certificate && pinOf(it) in pins }
+    /**
+     * TrustManager mặc định của hệ thống — thứ thực hiện xác thực chuỗi chứng
+     * chỉ tới root tin cậy. TrustManager tự viết không được phép thay thế nó.
+     */
+    private fun defaultTrustManager(): X509TrustManager {
+        val factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+        factory.init(null as KeyStore?)
+        return factory.trustManagers.filterIsInstance<X509TrustManager>().first()
     }
 
-    /** SSLContext kèm TrustManager ghim pin; dùng cho HttpsURLConnection. */
-    fun pinnedSslContext(context: Context?): SSLContext {
+    /**
+     * SSLContext có ghim pin, hoặc **null** khi chưa cấu hình pin.
+     *
+     * Trả về null là chủ đích: bên gọi phải giữ SSLContext mặc định của hệ
+     * thống, thay vì cài một TrustManager tự viết không kiểm tra root.
+     */
+    fun pinnedSslContext(context: Context?): SSLContext? {
+        val pins = loadPins(context)
+        if (pins.isEmpty()) return null
+        val default = defaultTrustManager()
         val trustManager = object : X509TrustManager {
-            override fun checkClientTrusted(chain: Array<X509Certificate>?, authType: String?) {}
+            override fun checkClientTrusted(chain: Array<X509Certificate>?, authType: String?) =
+                default.checkClientTrusted(chain, authType)
 
             override fun checkServerTrusted(chain: Array<X509Certificate>?, authType: String?) {
-                if (chain.isNullOrEmpty()) {
-                    throw CertificateException("Chuỗi chứng chỉ rỗng")
-                }
-                // Vẫn kiểm tra hợp lệ chuẩn trước (hạn dùng, chữ ký…).
-                chain.forEach { it.checkValidity() }
-                val pins = loadPins(context)
-                if (pins.isNotEmpty() && chain.none { pinOf(it) in pins }) {
+                // 1) Xác thực chuỗi tới root tin cậy bằng trust store hệ thống.
+                default.checkServerTrusted(chain, authType)
+                // 2) Rồi mới siết thêm bằng pin.
+                if (chain.isNullOrEmpty() || chain.none { pinOf(it) in pins }) {
                     throw CertificateException("Certificate pinning thất bại cho server")
                 }
             }
 
-            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+            override fun getAcceptedIssuers(): Array<X509Certificate> = default.acceptedIssuers
         }
         return SSLContext.getInstance("TLS").apply { init(null, arrayOf(trustManager), null) }
+    }
+
+    /**
+     * Kiểm tra tên miền rồi tới pin, dùng cho HostnameVerifier.
+     *
+     * Luôn chạy kiểm tra tên miền mặc định trước; chưa có pin thì dừng ở đó
+     * (đúng hành vi mặc định của Android). Bản cũ trả về true ngay khi chưa có
+     * pin nên đã tắt luôn cả kiểm tra tên miền.
+     */
+    fun verifyHostname(hostname: String, session: SSLSession, context: Context?): Boolean {
+        if (!HttpsURLConnection.getDefaultHostnameVerifier().verify(hostname, session)) return false
+        val pins = loadPins(context)
+        if (pins.isEmpty()) return true
+        val peer = session.peerCertificates
+        if (peer.isNullOrEmpty()) return false
+        return peer.any { it is X509Certificate && pinOf(it) in pins }
     }
 }
 
@@ -660,10 +695,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val conn = target.openConnection() as HttpURLConnection
         if (target.protocol == "https") {
             val https = conn as HttpsURLConnection
-            https.sslSocketFactory = CertificatePinner.pinnedSslContext(applicationContext).socketFactory
             val context = applicationContext
+            // Chỉ ghi đè SSLContext khi thật sự có pin. Khi chưa điền pin, giữ
+            // nguyên mặc định của Android (trust store hệ thống) — bản cũ luôn
+            // ghi đè bằng TrustManager tự viết nên đã vô hiệu hoá xác thực chuỗi.
+            CertificatePinner.pinnedSslContext(context)?.let { https.sslSocketFactory = it.socketFactory }
             https.hostnameVerifier = HostnameVerifier { hostname, session ->
-                CertificatePinner.isPinned(hostname, session, context)
+                CertificatePinner.verifyHostname(hostname, session, context)
             }
         } else {
             android.util.Log.w("Collector", "Ket noi HTTP khong ma hoa den ${target.host} — chi dung trong mang LAN.")

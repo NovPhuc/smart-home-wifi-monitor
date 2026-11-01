@@ -165,3 +165,95 @@ pytest tests -q                    -> 79 passed
 node C:\chorus\selftest-mcp.js     -> 28/28 đạt
 node C:\chorus\security-probe.js   -> 0 lỗ hổng / 12 hạng mục
 ```
+
+---
+
+## 8. Lỗ hổng NGHIÊM TRỌNG trong cert pinning của app Android (đã vá)
+
+`android_collector` có lớp "certificate pinning" cho kết nối HTTPS. Lớp này **tự viết
+`X509TrustManager`** và cài đè lên mặc định của Android:
+
+```kotlin
+override fun checkServerTrusted(chain, authType) {
+    chain.forEach { it.checkValidity() }        // chỉ xem hạn dùng
+    if (pins.isNotEmpty() && chain.none { pinOf(it) in pins }) throw ...
+}
+override fun getAcceptedIssuers() = arrayOf()
+```
+
+### Vì sao đây là lỗ hổng
+
+`checkServerTrusted` **không hề xác thực chuỗi chứng chỉ tới một root tin cậy**. Nó chỉ
+kiểm tra ngày hết hạn và (khi có pin) kiểm tra pin. Nghĩa là khi chưa cấu hình pin, **mọi
+chứng chỉ tự ký đều được chấp nhận** — chứng chỉ của kẻ tấn công cũng vậy.
+
+Tệ hơn, `HostnameVerifier` được thay bằng:
+
+```kotlin
+fun isPinned(hostname, session, context): Boolean {
+    val pins = loadPins(context)
+    if (pins.isEmpty()) return true     // <-- luôn đúng tên miền
+    ...
+}
+```
+
+⇒ khi chưa có pin, **kiểm tra tên miền cũng bị tắt**.
+
+### Trạng thái mặc định là trạng thái dính lỗi
+
+`app/src/main/res/raw/cert_pins.txt` chỉ chứa **dòng chú thích**; `loadPins()` lọc bỏ chúng
+và trả về danh sách rỗng. Vậy nhánh fail-open chính là nhánh **đang chạy trong bản build
+thật**, đúng như nhận xét trong chính file đó ("chưa điền pin thật thì app vẫn chạy bằng
+trust store hệ thống") — nhận xét này **sai**: trust store hệ thống không được dùng đến.
+
+Hệ quả: mọi kết nối `https://` của app chấp nhận chứng chỉ bất kỳ và tên miền bất kỳ. Kẻ
+tấn công trong cùng mạng có thể đánh tráo và đọc được **email + mật khẩu đăng nhập** và
+**token thiết bị** gửi lên máy chủ. Đây là kiểu lỗi mà một tính năng bảo mật tự tạo ra lỗ
+hổng: nếu không viết code pinning nào thì Android vẫn kiểm tra chuỗi chứng chỉ bình thường.
+
+### Cách vá (đã áp dụng)
+
+1. `defaultTrustManager()` lấy TrustManager mặc định từ `TrustManagerFactory` với trust
+   store hệ thống.
+2. `checkServerTrusted` **uỷ thác cho mặc định trước** (xác thực chuỗi tới root), rồi mới
+   kiểm tra pin. `getAcceptedIssuers` trả về issuers thật thay vì mảng rỗng.
+3. `pinnedSslContext()` trả về **null** khi chưa cấu hình pin; bên gọi giữ nguyên mặc định
+   của Android thay vì cài TrustManager tự viết.
+4. `verifyHostname()` luôn chạy `HttpsURLConnection.getDefaultHostnameVerifier()` trước,
+   rồi mới áp pin nếu có. Chưa có pin ⇒ dùng đúng hành vi mặc định của Android.
+
+Kiểm chứng: không còn tham chiếu `isPinned` nào; `gradlew assembleDebug` biên dịch thành
+công (xem mục 9).
+
+### Việc cần làm khi phát hành
+
+`res/xml/network_security_config.xml` và `res/raw/cert_pins.txt` còn giữ chỗ trống
+`REPLACE_WITH_PRIMARY_PIN` / `your-server-domain.example`. **Phải thay bằng giá trị thật
+trước khi phát hành**, nếu không domain HTTPS sẽ bị ghim vào một chuỗi không tồn tại và mọi
+kết nối tới domain đó sẽ thất bại (lỗi khả dụng, không phải lỗi bảo mật — nhưng người dùng
+sẽ thấy app không kết nối được).
+
+---
+
+## 9. Kiểm chứng bản vá Android và sửa môi trường build
+
+Bản vá ở mục 8 đã được **biên dịch thật**:
+
+```
+> Task :app:compileDebugKotlin
+> Task :app:assembleDebug
+BUILD SUCCESSFUL in 52s
+33 actionable tasks: 33 executed
+```
+
+Chỉ còn 3 cảnh báo `deprecated` có sẵn từ trước (`resolveService`, `NsdServiceInfo.host`,
+`WifiManager.startScan`) — không liên quan tới phần vừa sửa.
+
+Để build được, phải sửa **hai lỗi môi trường** (không phải lỗi mã):
+
+| Lỗi | Triệu chứng | Cách sửa |
+|---|---|---|
+| `android_collector/gradle.properties` ghim `org.gradle.java.home=C:/Program Files/Android/Android Studio/jbr` | Mọi lệnh `gradlew` chết ngay: *"Java home supplied is invalid"*. Android Studio trên máy này đã chuyển sang `E:\Android`. | Bỏ dòng ghim JDK khỏi file được commit; Gradle dùng `JAVA_HOME` của máy. Muốn ghim thì đặt biến môi trường. |
+| `local.properties` trỏ `sdk.dir=E:\Android` | `E:\Android` chỉ chứa thư mục Android Studio, **không phải Android SDK** ⇒ Gradle báo thiếu `platforms;android-34` và `build-tools;34.0.0`. | SDK thật nằm ở `%LOCALAPPDATA%\Android\Sdk` (đã có android-33/34/35/36 và build-tools 34.0.0). Trỏ `sdk.dir` về đó. File này đã nằm trong `.gitignore` nên chỉ ảnh hưởng máy này. |
+
+Cả hai lỗi đều **có sẵn từ trước**, không phát sinh do bản vá bảo mật.
