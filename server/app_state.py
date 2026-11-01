@@ -3,6 +3,9 @@
 Tách khỏi app.py để route/service thao tác trên MỘT nguồn sự thật. Test thay
 đổi ``app_state.db`` (thay database tạm) và gọi ``reset_runtime()`` giữa các
 test — mọi route đọc trạng thái qua module này nên luôn nhìn thấy thay đổi.
+
+Hỗ trợ Redis cho distributed deployment (nhiều instance Flask chung session,
+rate limit, cache). Fallback về RAM nếu Redis không cấu hình.
 """
 from __future__ import annotations
 
@@ -11,6 +14,7 @@ from pathlib import Path
 import csv
 import os
 import threading
+from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,12 +26,75 @@ from smarthome.storage import SmartHomeDatabase
 
 from app_security import AttemptLimiter, DUMMY_PASSWORD_HASH  # noqa: F401 (re-export)
 
+# ----------------------------------------------------------------------------
+# Redis support (optional) - dùng chung cho session, rate limit, cache
+# ----------------------------------------------------------------------------
+try:
+    import redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    redis = None
+    REDIS_AVAILABLE = False
+
+def get_redis_client():
+    """Tạo Redis client từ env vars. Trả về None nếu không cấu hình."""
+    if not REDIS_AVAILABLE:
+        return None
+    host = os.getenv("REDIS_HOST", "").strip()
+    if not host:
+        return None
+    port = int(os.getenv("REDIS_PORT", "6379"))
+    db = int(os.getenv("REDIS_DB", "0"))
+    password = os.getenv("REDIS_PASSWORD", "").strip() or None
+    try:
+        client = redis.Redis(
+            host=host, port=port, db=db, password=password,
+            socket_connect_timeout=2, socket_timeout=2,
+            decode_responses=True
+        )
+        client.ping()
+        return client
+    except Exception:
+        return None
+
+_redis_client = None
+
+def get_redis() -> Optional["redis.Redis"]:
+    """Lấy Redis client singleton (lazy init)."""
+    global _redis_client
+    if _redis_client is not None:
+        return _redis_client
+    if not REDIS_AVAILABLE:
+        return None
+    host = os.getenv("REDIS_HOST", "").strip()
+    if not host:
+        return None
+    port = int(os.getenv("REDIS_PORT", "6379"))
+    db = int(os.getenv("REDIS_DB", "0"))
+    password = os.getenv("REDIS_PASSWORD", "").strip() or None
+    try:
+        client = redis.Redis(
+            host=host, port=int(os.getenv("REDIS_PORT", "6379")),
+            db=int(os.getenv("REDIS_DB", "0")),
+            password=os.getenv("REDIS_PASSWORD", "").strip() or None,
+            socket_connect_timeout=2, socket_timeout=2,
+            decode_responses=True
+        )
+        client.ping()
+        _redis_client = client
+        return client
+    except Exception:
+        return None
+
 cfg = load_config(ROOT / "config.yaml")
 
 db = SmartHomeDatabase(os.getenv("SMART_HOME_DATABASE", ROOT / "data" / "smarthome.db"))
 
 demo_engine = SmartHomeInferenceEngine(cfg, ROOT / "models")
 engine = demo_engine  # Tương thích ngược với các script cũ import `engine`.
+
+# Redis status flag (read-only after init)
+REDIS_ENABLED = get_redis() is not None
 
 lock = threading.RLock()
 home_engines: dict[int, SmartHomeInferenceEngine] = {}

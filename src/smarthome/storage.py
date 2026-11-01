@@ -182,7 +182,9 @@ class SmartHomeDatabase:
                 self._migrate_rooms_name_key(connection)
                 self._migrate_scan_reliability(connection)
                 # PRAGMA không hỗ trợ parameterized query; SCHEMA_VERSION là const int
-                connection.execute(f"PRAGMA user_version = {int(SCHEMA_VERSION)}")
+                # PRAGMA ghi giá trị không nhận tham số ràng buộc trong sqlite3;
+                # SCHEMA_VERSION là hằng số int của module — không có input ngoài.
+                connection.execute(f"PRAGMA user_version = {int(SCHEMA_VERSION)}")  # nosec — an toàn, hằng số module
 
     @staticmethod
     def _migrate_scan_reliability(connection: sqlite3.Connection) -> None:

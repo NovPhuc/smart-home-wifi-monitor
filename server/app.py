@@ -31,6 +31,7 @@ from security_middleware import (
     install_json_errors,
     install_rate_limiting,
     install_request_guard,
+    install_session_guard,
     reset_rate_limits,
 )
 
@@ -47,8 +48,11 @@ def create_app() -> Flask:
     )
     application.after_request(apply_security_headers)
 
-    # Thứ tự before_request: chặn flood trước, rồi mới kiểm tra kiểu body và
-    # mẫu tấn công — request bị rate limit không tốn công parse.
+    # Thứ tự before_request: dọn phiên hết hạn trước (rẻ, và mọi route sau
+    # đó phải nhìn thấy trạng thái đăng nhập đúng), rồi chặn flood, rồi mới
+    # kiểm tra kiểu body và mẫu tấn công — request bị rate limit không tốn
+    # công parse.
+    install_session_guard(application)
     install_rate_limiting(application)
     install_request_guard(application)
     install_extra_headers(application)

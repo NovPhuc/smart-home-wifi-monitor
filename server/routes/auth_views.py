@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request, session as flask_session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import app_state
+from app_security import mark_session_issued
 from app_services import active_home, login_required
 
 bp = Blueprint("auth", __name__)
@@ -47,6 +48,7 @@ def register():
     flask_session.clear()
     flask_session["user_id"] = user["id"]
     flask_session["active_home_id"] = home["id"]
+    mark_session_issued()
     return jsonify({"user": {"id": user["id"], "email": user["email"], "display_name": user["display_name"]}, "active_home": home}), 201
 
 
@@ -69,6 +71,7 @@ def login():
     app_state.login_limiter.reset(email)
     flask_session.clear()
     flask_session["user_id"] = user["id"]
+    mark_session_issued()
     homes = app_state.db.list_homes(user["id"])
     if homes:
         flask_session["active_home_id"] = homes[0]["id"]

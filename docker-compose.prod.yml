@@ -1,0 +1,139 @@
+# docker-compose.prod.yml - Production deployment với Nginx, Certbot, Cloudflared, Redis
+# Chạy: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  # Redis cho distributed caching, rate limiting, session sharing
+  redis:
+    image: redis:7-alpine
+    container_name: an-tam-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Application server (Gunicorn + Flask)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+    image: an-tam-home:2310
+    container_name: an-tam-home
+    restart: unless-stopped
+    # Không expose port 5000 ra ngoài - chỉ Nginx truy cập
+    expose:
+      - "5000"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - SMART_HOME_DATABASE=/app/data/smarthome.db
+      - SMART_HOME_SECRET_KEY=${SMART_HOME_SECRET_KEY:-}
+      - SMART_HOME_SECURE_COOKIE=1
+      - SMART_HOME_SSL_CERT=${SMART_HOME_SSL_CERT:-}
+      - SMART_HOME_SSL_KEY=${SMART_HOME_SSL_KEY:-}
+      - PYTHONPATH=/app/src
+      # Redis config
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      # Trust proxy cho rate limiting behind Nginx
+      - SMART_HOME_TRUST_PROXY=1
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Nginx reverse proxy + SSL termination + Rate limiting
+  nginx:
+    image: nginx:alpine
+    container_name: an-tam-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - ./certbot-www:/var/www/certbot:ro
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  # Certbot cho Let's Encrypt SSL
+  certbot:
+    image: certbot/certbot
+    container_name: an-tam-certbot
+    volumes:
+      - ./certs:/etc/letsencrypt
+      - ./certbot-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h; done'"
+    profiles:
+      - ssl
+
+  # Cloudflare Tunnel (alternative to Nginx SSL)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: an-tam-cloudflared
+    restart: unless-stopped
+    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    profiles:
+      - tunnel
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # Certbot initial setup (run once)
+  certbot-init:
+    image: certbot/certbot
+    container_name: an-tam-certbot-init
+    volumes:
+      - ./certs:/etc/letsencrypt
+      - ./certbot-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'certbot certonly --webroot -w /var/www/certbot -d ${DOMAIN:-an-tam.example.com} --email ${CERTBOT_EMAIL:-admin@example.com} --agree-tos --no-eff-email --non-interactive'"
+    profiles:
+      - ssl-init
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: an-tam-network
+    driver: bridge

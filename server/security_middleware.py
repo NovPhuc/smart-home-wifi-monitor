@@ -5,9 +5,8 @@ Bổ sung cho các lớp đã có trong ``app_security`` (CSP, nosniff,
 X-Frame-Options, AttemptLimiter):
 
 - ``RateLimiter``: giới hạn tần suất theo nhóm endpoint ``/api/*`` bằng
-  sliding window trong RAM, chặn ngắn khi vượt ngưỡng. Chỉ áp lên API để
-  không chặn nhầm dashboard/static — frontend hỏi trạng thái 3 request mỗi
-  2 giây.
+  sliding window. Hỗ trợ Redis cho distributed deployment (nhiều instance
+  Flask chung quota), fallback về RAM nếu Redis không cấu hình.
 - ``install_request_guard``: chỉ nhận body JSON cho thao tác ghi (lớp phòng
   thủ CSRF thứ hai, bên cạnh cookie SameSite=Lax) và chặn sớm query/path
   chứa mẫu SQL injection/XSS. Truy vấn thật vẫn là tham số hóa + Jinja
@@ -30,8 +29,44 @@ import threading
 import time
 from typing import Optional
 
-from flask import Response, g, jsonify, request
+from flask import Response, g, jsonify, request, session as flask_session
 from werkzeug.exceptions import HTTPException, InternalServerError
+
+from app_security import session_expired
+
+# ----------------------------------------------------------------------------
+# Redis support (optional)
+# ----------------------------------------------------------------------------
+try:
+    import redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    redis = None
+    REDIS_AVAILABLE = False
+
+def get_redis_client():
+    """Tạo Redis client từ env vars. Trả về None nếu không cấu hình."""
+    if not REDIS_AVAILABLE:
+        return None
+    host = os.getenv("REDIS_HOST", "").strip()
+    if not host:
+        return None
+    port = int(os.getenv("REDIS_PORT", "6379"))
+    db = int(os.getenv("REDIS_DB", "0"))
+    password = os.getenv("REDIS_PASSWORD", "").strip() or None
+    try:
+        client = redis.Redis(
+            host=host, port=port, db=db, password=password,
+            socket_connect_timeout=2, socket_timeout=2,
+            decode_responses=True
+        )
+        # Test connection
+        client.ping()
+        return client
+    except Exception:
+        return None
+
+_redis_client = get_redis_client()
 
 # ----------------------------------------------------------------------------
 # Rate limiting
@@ -65,16 +100,115 @@ def _trust_proxy() -> bool:
 class RateLimiter:
     """Giới hạn tần suất sliding window theo (nhóm endpoint, IP client).
 
-    Bộ đếm nằm trong RAM và có khóa, nên nhiều thread Flask (hoặc waitress)
-    không làm hỏng deque. Số client được theo dõi bị giới hạn: khi vượt
-    ngưỡng, các cửa sổ cũ nhất bị loại để kẻ gửi request từ hàng nghìn IP
-    giả không làm phình bộ nhớ.
+    Hỗ trợ 2 chế độ:
+    - Redis (distributed): dùng sorted set với TTL, đồng bộ giữa nhiều instance
+    - RAM (fallback): deque trong bộ nhớ, chỉ hoạt động single-instance
     """
 
     def __init__(self) -> None:
-        self._requests: dict[str, deque[float]] = {}
-        self._blocked: dict[str, float] = {}
-        self._lock = threading.Lock()
+        self._redis = _redis_client
+        self._use_redis = self._redis is not None
+        if not self._use_redis:
+            self._requests: dict[str, deque[float]] = {}
+            self._blocked: dict[str, float] = {}
+            self._lock = threading.Lock()
+
+    def _client_id(self) -> str:
+        """Xác định client ID: IP + UA hash. Trust proxy nếu cấu hình."""
+        if _trust_proxy():
+            forwarded = request.headers.get("X-Forwarded-For", "")
+            ip = forwarded.split(",")[0].strip() if forwarded else request.remote_addr
+        else:
+            ip = request.remote_addr or "?"
+        ua = request.headers.get("User-Agent", "").encode("utf-8", "ignore")
+        return f"{ip}:{hashlib.sha256(ua).hexdigest()[:8]}"
+
+    def _rate_limit_key(self, group: str, client_id: str) -> str:
+        return f"ratelimit:{group}:{client_id}"
+
+    def _block_key(self, client_id: str) -> str:
+        return f"ratelimit:block:{client_id}"
+
+    def check(self, group: str, limit: int, window_seconds: int) -> tuple[bool, dict]:
+        """Kiểm tra rate limit. Trả về (allowed, info_dict)."""
+        client_id = self._client_id()
+        key = self._rate_limit_key(group, client_id)
+        block_key = self._block_key(client_id)
+        now = time.time()
+
+        if self._use_redis:
+            return self._check_redis(group, limit, window_seconds, key, block_key, now)
+        else:
+            return self._check_ram(group, limit, window_seconds, key, block_key, now)
+
+    def _check_redis(self, group: str, limit: int, window_seconds: int,
+                     key: str, block_key: str, now: float) -> tuple[bool, dict]:
+        """Rate limit dùng Redis sorted set (sliding window log)."""
+        try:
+            pipe = self._redis.pipeline()
+            window_start = now - window_seconds
+
+            # Remove expired entries
+            pipe.zremrangebyscore(key, 0, window_start)
+            # Count current requests
+            pipe.zcard(key)
+            # Check block
+            pipe.get(block_key)
+            results = pipe.execute()
+
+            current_count = results[1]
+            blocked_until = results[2]
+
+            if blocked_until and float(blocked_until) > now:
+                return False, {"retry_after": int(float(blocked_until) - now) + 1}
+
+            if current_count >= limit:
+                # Block for BLOCK_SECONDS
+                self._redis.setex(block_key, BLOCK_SECONDS, str(now + BLOCK_SECONDS))
+                return False, {"retry_after": BLOCK_SECONDS}
+
+            # Add current request
+            self._redis.zadd(key, {str(now): now})
+            self._redis.expire(key, window_seconds + 1)
+            return True, {"remaining": limit - current_count - 1}
+
+        except Exception:
+            # Fallback to RAM on Redis error
+            self._use_redis = False
+            self._requests = {}
+            self._blocked = {}
+            self._lock = threading.Lock()
+            return self._check_ram(group, limit, window_seconds, key, block_key, now)
+
+    def _check_ram(self, group: str, limit: int, window_seconds: int,
+                   key: str, block_key: str, now: float) -> tuple[bool, dict]:
+        """Rate limit dùng RAM (fallback)."""
+        with self._lock:
+            # Clean up old entries if too many clients
+            if len(self._requests) > MAX_TRACKED_CLIENTS:
+                oldest = min(self._requests.items(), key=lambda x: x[1][0] if x[1] else now)
+                self._requests.pop(oldest[0], None)
+                self._blocked.pop(oldest[0], None)
+
+            # Check block
+            unblock_at = self._blocked.get(key)
+            if unblock_at and now < unblock_at:
+                return False, {"retry_after": int(unblock_at - now) + 1}
+            elif unblock_at:
+                del self._blocked[key]
+
+            # Sliding window
+            window = self._requests.setdefault(key, deque())
+            window_start = now - window_seconds
+            while window and window[0] < window_start:
+                window.popleft()
+
+            if len(window) >= limit:
+                self._blocked[key] = now + BLOCK_SECONDS
+                return False, {"retry_after": BLOCK_SECONDS}
+
+            window.append(now)
+            return True, {"remaining": limit - len(window)}
 
     @staticmethod
     def _client_id() -> str:
@@ -194,6 +328,28 @@ def reset_rate_limits(app) -> None:
     limiter = app.extensions.get("rate_limiter")
     if limiter is not None:
         limiter.reset()
+
+
+# ----------------------------------------------------------------------------
+# Session expiry
+# ----------------------------------------------------------------------------
+
+def install_session_guard(app) -> None:
+    """Vô hiệu hóa phiên quá hạn ngay khi request tới.
+
+    Cookie Flask chỉ được ký, không có hạn phía server: cookie bị chụp lại
+    (HTTP trong LAN, malware) hợp lệ vô thời hạn và logout không thu hồi
+    được bản sao đã chụp. Mỗi phiên mang dấu ``_iat`` (xem
+    ``app_security.mark_session_issued``); quá
+    ``SMART_HOME_SESSION_MAX_AGE_HOURS`` (mặc định 7 ngày) là bị xóa, client
+    phải đăng nhập lại.
+    """
+
+    @app.before_request
+    def enforce_session_expiry():
+        if flask_session.get("user_id") and session_expired():
+            flask_session.clear()
+        return None
 
 
 # ----------------------------------------------------------------------------

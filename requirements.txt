@@ -8,3 +8,4 @@ zeroconf>=0.132
 joblib>=1.3
 pytest>=8.0
 requests>=2.31
+redis>=5.0

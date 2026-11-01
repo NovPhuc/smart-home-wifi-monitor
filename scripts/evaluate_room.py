@@ -85,7 +85,9 @@ def main():
             # Model-only latency
             x = x.to(device)
             t0 = time.perf_counter()
-            logits, _ = model(x)
+            # RoomNetMT trả 3 phần tử (logits, emb, activity_logits) — lấy logits.
+            out = model(x)
+            logits = out[0]
             if device == "cuda":
                 torch.cuda.synchronize()
             latencies_model.append((time.perf_counter() - t0) * 1000.0 / x.shape[0])
@@ -133,7 +135,15 @@ def main():
     result["mean_e2e_latency_ms_per_sample"] = float(
         sum(latencies_e2e) / max(len(latencies_e2e), 1)
     )
-    save_json(result, Path(args.models_dir) / "room_test_metrics.json")
+    # RoomNetLite giữ tên file cũ để /api/metrics đọc tiếp được; model khác
+    # ghi file riêng theo tên.
+    if args.output:
+        output_name = args.output
+    elif args.model == "RoomNetLite":
+        output_name = "room_test_metrics.json"
+    else:
+        output_name = f"room_test_metrics_{args.model}.json"
+    save_json(result, Path(args.models_dir) / output_name)
     print(json.dumps(result, ensure_ascii=False))
 
 

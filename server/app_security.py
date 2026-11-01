@@ -49,6 +49,26 @@ def resolve_secret_key() -> str:
         return secrets.token_hex(32)
 
 
+def mark_session_issued() -> None:
+    """Ghi dấu thời điểm cấp phiên — gọi ngay sau đăng nhập/đăng ký thành công."""
+    flask_session["_iat"] = int(time.time())
+
+
+def session_expired() -> bool:
+    """True nếu phiên hiện tại đã quá hạn hoặc thiếu dấu thời gian cấp phát.
+
+    Phiên thiếu ``_iat`` (cookie cũ trước khi có cơ chế này) cũng bị coi là
+    hết hạn: mọi người đăng nhập lại đúng một lần sau nâng cấp, đổi lại
+    không có cookie nào "lọt lưới" không rõ tuổi.
+    """
+    if SESSION_MAX_AGE_HOURS <= 0:
+        return False
+    issued_at = flask_session.get("_iat")
+    if issued_at is None:
+        return True
+    return (time.time() - float(issued_at)) > SESSION_MAX_AGE_HOURS * 3600
+
+
 class AttemptLimiter:
     """Chặn dò mật khẩu / dò mã chia sẻ bằng cách thử lặp.
 

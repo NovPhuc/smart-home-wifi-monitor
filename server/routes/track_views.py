@@ -358,13 +358,18 @@ def export_scans():
         return error
     scans = app_state.db.export_scans(home["id"])
     aps = sorted({ap for scan in scans for ap in json.loads(scan["wifi_json"]).keys()})
-    fields = ["timestamp", "session_id", "device_id", "room", "orientation", *aps]
+    # Tên AP do client tự gửi (collect chỉ cắt 64 ký tự), nên dòng header cũng
+    # phải vệ sinh như giá trị ô: key "=HYPERLINK(...)" lọt vào fields sẽ chạy
+    # công thức khi mở file bằng Excel. Dùng chung csv_formula_safe cho
+    # fieldnames và key của row để hai phía luôn khớp nhau.
+    fields = ["timestamp", "session_id", "device_id", "room", "orientation",
+              *(csv_formula_safe(ap) for ap in aps)]
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=fields)
     writer.writeheader()
     for scan in scans:
         wifi = json.loads(scan.pop("wifi_json"))
-        row = {**scan, **wifi}
+        row = {**scan, **{csv_formula_safe(ap): rssi for ap, rssi in wifi.items()}}
         for field in ("session_id", "device_id", "room", "orientation"):
             row[field] = csv_formula_safe(row.get(field, ""))
         writer.writerow(row)
