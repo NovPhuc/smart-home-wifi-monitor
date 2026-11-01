@@ -1,0 +1,65 @@
+# docker-compose.yml cho An Tâm Home
+# Chạy: docker compose up -d
+# Logs: docker compose logs -f
+# Dừng: docker compose down
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+    image: an-tam-home:2310
+    container_name: an-tam-home
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - SMART_HOME_DATABASE=/app/data/smarthome.db
+      - SMART_HOME_SECURE_COOKIE=0
+      - SMART_HOME_SECRET_KEY=${SMART_HOME_SECRET_KEY:-}
+      - SMART_HOME_SSL_CERT=${SMART_HOME_SSL_CERT:-}
+      - SMART_HOME_SSL_KEY=${SMART_HOME_SSL_KEY:-}
+      - PYTHONPATH=/app/src
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  # Service dev (optional) — chạy test, lint
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    image: an-tam-home:dev
+    container_name: an-tam-home-dev
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - SMART_HOME_DATABASE=/app/data/smarthome.db
+      - PYTHONPATH=/app/src
+    command: ["pytest", "tests", "-v"]
+    profiles:
+      - dev
+
+  # Service backup source (optional) — tạo archive toàn bộ project
+  archive:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: archive
+    image: an-tam-home:archive
+    container_name: an-tam-home-archive
+    volumes:
+      - ./output:/out
+    command: ["cp", "/an-tam-home-2310-full-source.tar.gz", "/out/"]
+    profiles:
+      - archive
