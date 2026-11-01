@@ -28,8 +28,80 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import java.security.MessageDigest
+import java.security.cert.CertificateException
+import java.security.cert.X509Certificate
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSession
+import javax.net.ssl.X509TrustManager
 import kotlin.concurrent.thread
 import kotlin.math.abs
+
+/**
+ * Ghim chứng chỉ server (certificate pinning) cho các kết nối HTTPS.
+ *
+ * Chỉ áp dụng cho URL https:// (domain/tunnel ra ngoài LAN). Kết nối HTTP
+ * trong mạng LAN do NSD tự phát hiện không đi qua ghim — HTTP không có
+ * chứng chỉ để ghim; ranh giới tin cậy của mạng LAN nhà là điểm truy cập WiFi.
+ *
+ * Pin lấy từ res/raw/cert_pins.txt (một pin mỗi dòng, định dạng
+ * "sha256/<base64 SPKI>"). Sinh pin bằng:
+ *   openssl x509 -in cert.pem -pubkey -noout | openssl pkey -pubin -outform DER \
+ *     | openssl dgst -sha256 -binary | base64
+ * Chưa có file/chưa ghim thì dùng trust store hệ thống (vẫn kiểm tra chuỗi
+ * chứng chỉ chuẩn) — ghim là lớp tăng cường, không phải điều kiện chạy.
+ */
+object CertificatePinner {
+    private const val TAG = "CertificatePinner"
+
+    private fun loadPins(context: Context?): List<String> {
+        if (context == null) return emptyList()
+        return try {
+            context.resources.openRawResource(R.raw.cert_pins).bufferedReader().readLines()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !it.startsWith("#") }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** Băm SPKI (phần public key) của chứng chỉ về dạng "sha256/<base64>". */
+    private fun pinOf(cert: X509Certificate): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(cert.publicKey.encoded)
+        return "sha256/" + android.util.Base64.encodeToString(digest, android.util.Base64.NO_WRAP)
+    }
+
+    fun isPinned(hostname: String, session: SSLSession, context: Context?): Boolean {
+        val pins = loadPins(context)
+        if (pins.isEmpty()) return true // chưa cấu hình pin -> chỉ dùng trust hệ thống
+        val peer = session.peerCertificates
+        if (peer.isNullOrEmpty()) return false
+        return peer.any { it is X509Certificate && pinOf(it) in pins }
+    }
+
+    /** SSLContext kèm TrustManager ghim pin; dùng cho HttpsURLConnection. */
+    fun pinnedSslContext(context: Context?): SSLContext {
+        val trustManager = object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<X509Certificate>?, authType: String?) {}
+
+            override fun checkServerTrusted(chain: Array<X509Certificate>?, authType: String?) {
+                if (chain.isNullOrEmpty()) {
+                    throw CertificateException("Chuỗi chứng chỉ rỗng")
+                }
+                // Vẫn kiểm tra hợp lệ chuẩn trước (hạn dùng, chữ ký…).
+                chain.forEach { it.checkValidity() }
+                val pins = loadPins(context)
+                if (pins.isNotEmpty() && chain.none { pinOf(it) in pins }) {
+                    throw CertificateException("Certificate pinning thất bại cho server")
+                }
+            }
+
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        }
+        return SSLContext.getInstance("TLS").apply { init(null, arrayOf(trustManager), null) }
+    }
+}
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var wifiManager: WifiManager
@@ -564,6 +636,26 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         return "AP_" + digest.take(6).joinToString("") { "%02x".format(it) }
     }
 
+    /**
+     * Mở kết nối tới server. HTTPS được ghim chứng chỉ (certificate pinning);
+     * HTTP (LAN do NSD tự tìm) chỉ cảnh báo trong log hệ thống — ghim không
+     * áp dụng được cho HTTP vì không có chứng chỉ.
+     */
+    private fun openConnection(target: URL): HttpURLConnection {
+        val conn = target.openConnection() as HttpURLConnection
+        if (target.protocol == "https") {
+            val https = conn as HttpsURLConnection
+            https.sslSocketFactory = CertificatePinner.pinnedSslContext(applicationContext).socketFactory
+            val context = applicationContext
+            https.hostnameVerifier = HostnameVerifier { hostname, session ->
+                CertificatePinner.isPinned(hostname, session, context)
+            }
+        } else {
+            android.util.Log.w("Collector", "Ket noi HTTP khong ma hoa den ${target.host} — chi dung trong mang LAN.")
+        }
+        return conn
+    }
+
     private fun postJson(target: String, payload: JSONObject) {
         val isCollect = target.endsWith("/api/collect")
         val apCount = payload.optJSONObject("wifi")?.length() ?: 0
@@ -571,7 +663,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         log("Đang gửi $apCount APs...")
         thread {
             try {
-                val conn = URL(target).openConnection() as HttpURLConnection
+                val conn = openConnection(URL(target))
                 conn.requestMethod = "POST"
                 conn.connectTimeout = 6000
                 conn.readTimeout = 6000
@@ -615,7 +707,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         var responseCode = 0
         var responseBody = ""
         try {
-            val conn = URL(target).openConnection() as HttpURLConnection
+            val conn = openConnection(URL(target))
             conn.requestMethod = "POST"
             conn.connectTimeout = 6000
             conn.readTimeout = 6000
@@ -637,7 +729,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         var responseCode = 0
         var responseBody = ""
         try {
-            val conn = URL(target).openConnection() as HttpURLConnection
+            val conn = openConnection(URL(target))
             conn.requestMethod = "GET"
             conn.connectTimeout = 6000
             conn.readTimeout = 6000

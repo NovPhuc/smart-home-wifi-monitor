@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cấu hình an toàn mạng cho app Collector.
+
+  - HTTPS: ưu tiên ghim chứng chỉ (pin-set). Cập nhật pin trong
+    res/raw/cert_pins.txt và tại đây khi đổi chứng chỉ server.
+  - HTTP: vẫn cho phép vì NSD tự tìm server trong LAN qua http://<ip>:5000 —
+    máy chủ gia đình không có chứng chỉ công khai. Kết nối LAN nhà tin vào
+    điểm truy cập WiFi; dữ liệu gửi đi là RSSI đã băm BSSID, không phải PII.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Domain thật khi chạy HTTPS (tunnel/ngrok/domain riêng): đặt tên
+         domain và pin tại đây để app từ chối mọi chứng chỉ khác. -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">your-server-domain.example</domain>
+        <pin-set expiration="2027-11-01">
+            <!-- Đổi pin thật lấy từ: openssl x509 -in cert.pem -pubkey -noout
+                 | openssl pkey -pubin -outform DER | openssl dgst -sha256
+                 -binary | base64 -->
+            <pin algorithm="SHA-256">REPLACE_WITH_PRIMARY_PIN</pin>
+            <pin algorithm="SHA-256">REPLACE_WITH_BACKUP_PIN</pin>
+        </pin-set>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Khi debug (build debug), cho phép chứng chỉ do người dùng cài để
+         bắt gói qua Charles/mitmproxy. Bản release không dùng mục này. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

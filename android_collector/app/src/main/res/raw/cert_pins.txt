@@ -1,0 +1,19 @@
+# Ghim chứng chỉ server (certificate pinning) — một pin mỗi dòng.
+# Định dạng: sha256/<base64 SPKI SHA-256>
+#
+# Cách sinh pin từ chứng chỉ server (cert.pem):
+#   openssl x509 -in cert.pem -pubkey -noout \
+#     | openssl pkey -pubin -outform DER \
+#     | openssl dgst -sha256 -binary | base64
+#
+# Giữ 2 pin: pin chính + pin dự phòng để luân chuyển chứng chỉ mà không
+# phải phát hành lại app. Chưa điền pin thật thì app vẫn chạy bằng trust
+# store hệ thống (ghim là lớp tăng cường).
+#
+# Cập nhật file này và res/xml/network_security_config.xml khi renew chứng chỉ.
+
+# Pin chính (thay bằng giá trị thật):
+# sha256/REPLACE_WITH_PRIMARY_PIN
+
+# Pin dự phòng (thay bằng giá trị thật):
+# sha256/REPLACE_WITH_BACKUP_PIN
