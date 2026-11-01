@@ -1,0 +1,402 @@
+
+(object Petal
+    version    	50
+    _written   	"Rose 2006.0.0.060314"
+    charSet    	0)
+
+(object Design "Logical View"
+    is_unit    	TRUE
+    is_loaded  	TRUE
+    quid       	"6ADCBE4E0262"
+    enforceClosureAutoLoad 	FALSE
+    defaults   	(object defaults
+	rightMargin 	0.250000
+	leftMargin 	0.250000
+	topMargin  	0.250000
+	bottomMargin 	0.500000
+	pageOverlap 	0.250000
+	clipIconLabels 	TRUE
+	autoResize 	TRUE
+	snapToGrid 	TRUE
+	gridX      	0
+	gridY      	0
+	defaultFont 	(object Font
+	    size       	10
+	    face       	"Arial"
+	    bold       	FALSE
+	    italics    	FALSE
+	    underline  	FALSE
+	    strike     	FALSE
+	    color      	0
+	    default_color 	TRUE)
+	showMessageNum 	3
+	showClassOfObject 	TRUE
+	notation   	"Unified")
+    root_usecase_package 	(object Class_Category "Use Case View"
+	quid       	"6ADCBE4E0264"
+	exportControl 	"Public"
+	global     	TRUE
+	logical_models 	(list unit_reference_list
+	    (object Class "Ngu?i thân (Giám sát)"
+		quid       	"6ADCBE510082"
+		stereotype 	"actor")
+	    (object Class "Android Collector"
+		quid       	"6ADCBE510084"
+		stereotype 	"actor")
+	    (object Class "iPhone PWA"
+		quid       	"6ADCBE510086"
+		stereotype 	"actor")
+	    (object Class "Ngu?i cao tu?i"
+		quid       	"6ADCBE510088"
+		stereotype 	"actor")
+	    (object UseCase "UC-01 Ðang ký tài kho?n + can nhà"
+		quid       	"6ADCBE51008A")
+	    (object UseCase "UC-02 Ðang nh?p - Ðang xu?t"
+		quid       	"6ADCBE51008B")
+	    (object UseCase "UC-03 Qu?n lý can nhà"
+		quid       	"6ADCBE51008C")
+	    (object UseCase "UC-04 Qu?n lý phòng"
+		quid       	"6ADCBE51008D")
+	    (object UseCase "UC-05 Ghép thi?t b? thu th?p"
+		quid       	"6ADCBE51008E")
+	    (object UseCase "UC-06 Thu th?p fingerprint RSSI"
+		quid       	"6ADCBE51008F")
+	    (object UseCase "UC-07 Xem ti?n d? calibration"
+		quid       	"6ADCBE510090")
+	    (object UseCase "UC-08 Hu?n luy?n model can nhà"
+		quid       	"6ADCBE510091")
+	    (object UseCase "UC-09 Giám sát v? trí realtime"
+		quid       	"6ADCBE510092")
+	    (object UseCase "UC-10 Xem so d? nhà + xác su?t"
+		quid       	"6ADCBE510093")
+	    (object UseCase "UC-11 Xem nh?p sinh ho?t"
+		quid       	"6ADCBE510094")
+	    (object UseCase "UC-12 Ch?y demo d? li?u m?u"
+		quid       	"6ADCBE510095")
+	    (object UseCase "UC-13 G?i d? li?u gia t?c k?"
+		quid       	"6ADCBE510096")
+	    (object UseCase "UC-14 Phát hi?n nghi ng? té ngã"
+		quid       	"6ADCBE510097")
+	    (object UseCase "UC-15 Nh?n - xem c?nh báo"
+		quid       	"6ADCBE510098")
+	    (object UseCase "UC-16 Xem k?t qu? th?c nghi?m"
+		quid       	"6ADCBE510099")
+	    (object UseCase "UC-17 Xu?t d? li?u scans CSV"
+		quid       	"6ADCBE51009A")
+	    (object UseCase "Xác th?c token thi?t b?"
+		quid       	"6ADCBE51009B")
+	    (object UseCase "Ð?nh v? phòng (RoomNet-Lite + Bayesian)"
+		quid       	"6ADCBE51009C")
+	    (object Association "$UNNAMED$0"
+		quid       	"6ADCBE51009D"
+		roles      	(list role_list
+		    (object Role "UC-01 Ðang ký tài kho?n + can nhà"
+			quid       	"6ADCBE51009E"
+			label      	"UC-01 Ðang ký tài kho?n + can nhà"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$1"
+			quid       	"6ADCBE5100A0"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$2"
+		quid       	"6ADCBE5100A2"
+		roles      	(list role_list
+		    (object Role "UC-02 Ðang nh?p - Ðang xu?t"
+			quid       	"6ADCBE5100A3"
+			label      	"UC-02 Ðang nh?p - Ðang xu?t"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$3"
+			quid       	"6ADCBE5100A5"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$4"
+		quid       	"6ADCBE5100A7"
+		roles      	(list role_list
+		    (object Role "UC-03 Qu?n lý can nhà"
+			quid       	"6ADCBE5100A8"
+			label      	"UC-03 Qu?n lý can nhà"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$5"
+			quid       	"6ADCBE5100AA"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$6"
+		quid       	"6ADCBE5100AC"
+		roles      	(list role_list
+		    (object Role "UC-04 Qu?n lý phòng"
+			quid       	"6ADCBE5100AD"
+			label      	"UC-04 Qu?n lý phòng"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$7"
+			quid       	"6ADCBE5100AF"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$8"
+		quid       	"6ADCBE5100B1"
+		roles      	(list role_list
+		    (object Role "UC-05 Ghép thi?t b? thu th?p"
+			quid       	"6ADCBE5100B2"
+			label      	"UC-05 Ghép thi?t b? thu th?p"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$9"
+			quid       	"6ADCBE5100B4"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$10"
+		quid       	"6ADCBE5100B6"
+		roles      	(list role_list
+		    (object Role "UC-07 Xem ti?n d? calibration"
+			quid       	"6ADCBE5100B7"
+			label      	"UC-07 Xem ti?n d? calibration"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$11"
+			quid       	"6ADCBE5100B9"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$12"
+		quid       	"6ADCBE5100BB"
+		roles      	(list role_list
+		    (object Role "UC-08 Hu?n luy?n model can nhà"
+			quid       	"6ADCBE5100BC"
+			label      	"UC-08 Hu?n luy?n model can nhà"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$13"
+			quid       	"6ADCBE5100BE"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$14"
+		quid       	"6ADCBE5100C0"
+		roles      	(list role_list
+		    (object Role "UC-09 Giám sát v? trí realtime"
+			quid       	"6ADCBE5100C1"
+			label      	"UC-09 Giám sát v? trí realtime"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$15"
+			quid       	"6ADCBE5100C3"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$16"
+		quid       	"6ADCBE5100C5"
+		roles      	(list role_list
+		    (object Role "UC-10 Xem so d? nhà + xác su?t"
+			quid       	"6ADCBE5100C6"
+			label      	"UC-10 Xem so d? nhà + xác su?t"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$17"
+			quid       	"6ADCBE5100C8"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$18"
+		quid       	"6ADCBE5100CA"
+		roles      	(list role_list
+		    (object Role "UC-11 Xem nh?p sinh ho?t"
+			quid       	"6ADCBE5100CB"
+			label      	"UC-11 Xem nh?p sinh ho?t"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$19"
+			quid       	"6ADCBE5100CD"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$20"
+		quid       	"6ADCBE5100CF"
+		roles      	(list role_list
+		    (object Role "UC-12 Ch?y demo d? li?u m?u"
+			quid       	"6ADCBE5100D0"
+			label      	"UC-12 Ch?y demo d? li?u m?u"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$21"
+			quid       	"6ADCBE5100D2"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$22"
+		quid       	"6ADCBE5100D4"
+		roles      	(list role_list
+		    (object Role "UC-15 Nh?n - xem c?nh báo"
+			quid       	"6ADCBE5100D5"
+			label      	"UC-15 Nh?n - xem c?nh báo"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$23"
+			quid       	"6ADCBE5100D7"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$24"
+		quid       	"6ADCBE5100D9"
+		roles      	(list role_list
+		    (object Role "UC-16 Xem k?t qu? th?c nghi?m"
+			quid       	"6ADCBE5100DA"
+			label      	"UC-16 Xem k?t qu? th?c nghi?m"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$25"
+			quid       	"6ADCBE5100DC"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$26"
+		quid       	"6ADCBE5100DE"
+		roles      	(list role_list
+		    (object Role "UC-17 Xu?t d? li?u scans CSV"
+			quid       	"6ADCBE5100DF"
+			label      	"UC-17 Xu?t d? li?u scans CSV"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$27"
+			quid       	"6ADCBE5100E1"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$28"
+		quid       	"6ADCBE5100E3"
+		roles      	(list role_list
+		    (object Role "UC-06 Thu th?p fingerprint RSSI"
+			quid       	"6ADCBE5100E4"
+			label      	"UC-06 Thu th?p fingerprint RSSI"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$29"
+			quid       	"6ADCBE5100E6"
+			supplier   	"Use Case View::Android Collector"
+			quidu      	"6ADCBE510084")))
+	    (object Association "$UNNAMED$30"
+		quid       	"6ADCBE5100E8"
+		roles      	(list role_list
+		    (object Role "UC-13 G?i d? li?u gia t?c k?"
+			quid       	"6ADCBE5100E9"
+			label      	"UC-13 G?i d? li?u gia t?c k?"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$31"
+			quid       	"6ADCBE5100EB"
+			supplier   	"Use Case View::iPhone PWA"
+			quidu      	"6ADCBE510086")))
+	    (object Association "$UNNAMED$32"
+		quid       	"6ADCBE5100ED"
+		stereotype 	"include"
+		roles      	(list role_list
+		    (object Role "$UNNAMED$33"
+			quid       	"6ADCBE5100EE"
+			supplier   	"Use Case View::UC-06 Thu th?p fingerprint RSSI"
+			quidu      	"6ADCBE51008F"
+			is_navigable 	TRUE)
+		    (object Role "Xác th?c token thi?t b?"
+			quid       	"6ADCBE5100EF"
+			label      	"Xác th?c token thi?t b?"
+			supplier   	"association"
+			is_navigable 	TRUE)))
+	    (object Association "$UNNAMED$34"
+		quid       	"6ADCBE5100F3"
+		stereotype 	"include"
+		roles      	(list role_list
+		    (object Role "$UNNAMED$35"
+			quid       	"6ADCBE5100F4"
+			supplier   	"Use Case View::UC-09 Giám sát v? trí realtime"
+			quidu      	"6ADCBE510092"
+			is_navigable 	TRUE)
+		    (object Role "Ð?nh v? phòng (RoomNet-Lite + Bayesian)"
+			quid       	"6ADCBE5100F5"
+			label      	"Ð?nh v? phòng (RoomNet-Lite + Bayesian)"
+			supplier   	"association"
+			is_navigable 	TRUE)))
+	    (object Association "$UNNAMED$36"
+		quid       	"6ADCBE5100F9"
+		stereotype 	"extend"
+		roles      	(list role_list
+		    (object Role "$UNNAMED$37"
+			quid       	"6ADCBE5100FA"
+			supplier   	"Use Case View::UC-14 Phát hi?n nghi ng? té ngã"
+			quidu      	"6ADCBE510097"
+			is_navigable 	TRUE)
+		    (object Role "UC-13 G?i d? li?u gia t?c k?"
+			quid       	"6ADCBE5100FB"
+			label      	"UC-13 G?i d? li?u gia t?c k?"
+			supplier   	"association"
+			is_navigable 	TRUE)))
+	    (object Association "$UNNAMED$38"
+		quid       	"6ADCBE5100FF"
+		stereotype 	"extend"
+		roles      	(list role_list
+		    (object Role "$UNNAMED$39"
+			quid       	"6ADCBE510100"
+			supplier   	"Use Case View::UC-12 Ch?y demo d? li?u m?u"
+			quidu      	"6ADCBE510095"
+			is_navigable 	TRUE)
+		    (object Role "UC-09 Giám sát v? trí realtime"
+			quid       	"6ADCBE510101"
+			label      	"UC-09 Giám sát v? trí realtime"
+			supplier   	"association"
+			is_navigable 	TRUE))))
+	logical_presentations 	(list unit_reference_list
+	    (object UseCaseDiagram "Main"
+		quid       	"6ADCBE4E0286"
+		title      	"Main"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))
+	    (object UseCaseDiagram "Phân tích thi?t k? h? th?ng"
+		quid       	"6ADCBE510081"
+		title      	"Phân tích thi?t k? h? th?ng"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))))
+    root_category 	(object Class_Category "Logical View"
+	quid       	"6ADCBE4E0263"
+	exportControl 	"Public"
+	global     	TRUE
+	subsystem  	"Component View"
+	quidu      	"6ADCBE4E0265"
+	logical_models 	(list unit_reference_list)
+	logical_presentations 	(list unit_reference_list
+	    (object ClassDiagram "Main"
+		quid       	"6ADCBE4E0279"
+		title      	"Main"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))))
+    root_subsystem 	(object SubSystem "Component View"
+	quid       	"6ADCBE4E0265"
+	physical_models 	(list unit_reference_list)
+	physical_presentations 	(list unit_reference_list
+	    (object Module_Diagram "Main"
+		quid       	"6ADCBE4E0285"
+		title      	"Main"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list)))
+	category   	"Logical View"
+	quidu      	"6ADCBE4E0263")
+    process_structure 	(object Processes
+	quid       	"6ADCBE4E0266"
+	ProcsNDevs 	(list
+	    (object Process_Diagram "Deployment View"
+		quid       	"6ADCBE4E0268"
+		title      	"Deployment View"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))))
+    properties 	(object Properties
+	quid       	"6ADCBE4E0267"))

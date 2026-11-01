@@ -1,0 +1,1069 @@
+
+(object Petal
+    version    	50
+    _written   	"Rose 2006.0.0.060314"
+    charSet    	0)
+
+(object Design "Logical View"
+    is_unit    	TRUE
+    is_loaded  	TRUE
+    quid       	"6ADCBE4E0262"
+    enforceClosureAutoLoad 	FALSE
+    defaults   	(object defaults
+	rightMargin 	0.250000
+	leftMargin 	0.250000
+	topMargin  	0.250000
+	bottomMargin 	0.500000
+	pageOverlap 	0.250000
+	clipIconLabels 	TRUE
+	autoResize 	TRUE
+	snapToGrid 	TRUE
+	gridX      	0
+	gridY      	0
+	defaultFont 	(object Font
+	    size       	10
+	    face       	"Arial"
+	    bold       	FALSE
+	    italics    	FALSE
+	    underline  	FALSE
+	    strike     	FALSE
+	    color      	0
+	    default_color 	TRUE)
+	showMessageNum 	3
+	showClassOfObject 	TRUE
+	notation   	"Unified")
+    root_usecase_package 	(object Class_Category "Use Case View"
+	quid       	"6ADCBE4E0264"
+	exportControl 	"Public"
+	global     	TRUE
+	logical_models 	(list unit_reference_list
+	    (object Class "Ngu?i thân (Giám sát)"
+		quid       	"6ADCBE510082"
+		stereotype 	"actor")
+	    (object Class "Android Collector"
+		quid       	"6ADCBE510084"
+		stereotype 	"actor")
+	    (object Class "iPhone PWA"
+		quid       	"6ADCBE510086"
+		stereotype 	"actor")
+	    (object Class "Ngu?i cao tu?i"
+		quid       	"6ADCBE510088"
+		stereotype 	"actor")
+	    (object UseCase "UC-01 Ðang ký tài kho?n + can nhà"
+		quid       	"6ADCBE51008A")
+	    (object UseCase "UC-02 Ðang nh?p - Ðang xu?t"
+		quid       	"6ADCBE51008B")
+	    (object UseCase "UC-03 Qu?n lý can nhà"
+		quid       	"6ADCBE51008C")
+	    (object UseCase "UC-04 Qu?n lý phòng"
+		quid       	"6ADCBE51008D")
+	    (object UseCase "UC-05 Ghép thi?t b? thu th?p"
+		quid       	"6ADCBE51008E")
+	    (object UseCase "UC-06 Thu th?p fingerprint RSSI"
+		quid       	"6ADCBE51008F")
+	    (object UseCase "UC-07 Xem ti?n d? calibration"
+		quid       	"6ADCBE510090")
+	    (object UseCase "UC-08 Hu?n luy?n model can nhà"
+		quid       	"6ADCBE510091")
+	    (object UseCase "UC-09 Giám sát v? trí realtime"
+		quid       	"6ADCBE510092")
+	    (object UseCase "UC-10 Xem so d? nhà + xác su?t"
+		quid       	"6ADCBE510093")
+	    (object UseCase "UC-11 Xem nh?p sinh ho?t"
+		quid       	"6ADCBE510094")
+	    (object UseCase "UC-12 Ch?y demo d? li?u m?u"
+		quid       	"6ADCBE510095")
+	    (object UseCase "UC-13 G?i d? li?u gia t?c k?"
+		quid       	"6ADCBE510096")
+	    (object UseCase "UC-14 Phát hi?n nghi ng? té ngã"
+		quid       	"6ADCBE510097")
+	    (object UseCase "UC-15 Nh?n - xem c?nh báo"
+		quid       	"6ADCBE510098")
+	    (object UseCase "UC-16 Xem k?t qu? th?c nghi?m"
+		quid       	"6ADCBE510099")
+	    (object UseCase "UC-17 Xu?t d? li?u scans CSV"
+		quid       	"6ADCBE51009A")
+	    (object UseCase "Xác th?c token thi?t b?"
+		quid       	"6ADCBE51009B")
+	    (object UseCase "Ð?nh v? phòng (RoomNet-Lite + Bayesian)"
+		quid       	"6ADCBE51009C")
+	    (object Association "$UNNAMED$0"
+		quid       	"6ADCBE51009D"
+		roles      	(list role_list
+		    (object Role "UC-01 Ðang ký tài kho?n + can nhà"
+			quid       	"6ADCBE51009E"
+			label      	"UC-01 Ðang ký tài kho?n + can nhà"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$1"
+			quid       	"6ADCBE5100A0"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$2"
+		quid       	"6ADCBE5100A2"
+		roles      	(list role_list
+		    (object Role "UC-02 Ðang nh?p - Ðang xu?t"
+			quid       	"6ADCBE5100A3"
+			label      	"UC-02 Ðang nh?p - Ðang xu?t"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$3"
+			quid       	"6ADCBE5100A5"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$4"
+		quid       	"6ADCBE5100A7"
+		roles      	(list role_list
+		    (object Role "UC-03 Qu?n lý can nhà"
+			quid       	"6ADCBE5100A8"
+			label      	"UC-03 Qu?n lý can nhà"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$5"
+			quid       	"6ADCBE5100AA"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$6"
+		quid       	"6ADCBE5100AC"
+		roles      	(list role_list
+		    (object Role "UC-04 Qu?n lý phòng"
+			quid       	"6ADCBE5100AD"
+			label      	"UC-04 Qu?n lý phòng"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$7"
+			quid       	"6ADCBE5100AF"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$8"
+		quid       	"6ADCBE5100B1"
+		roles      	(list role_list
+		    (object Role "UC-05 Ghép thi?t b? thu th?p"
+			quid       	"6ADCBE5100B2"
+			label      	"UC-05 Ghép thi?t b? thu th?p"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$9"
+			quid       	"6ADCBE5100B4"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$10"
+		quid       	"6ADCBE5100B6"
+		roles      	(list role_list
+		    (object Role "UC-07 Xem ti?n d? calibration"
+			quid       	"6ADCBE5100B7"
+			label      	"UC-07 Xem ti?n d? calibration"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$11"
+			quid       	"6ADCBE5100B9"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$12"
+		quid       	"6ADCBE5100BB"
+		roles      	(list role_list
+		    (object Role "UC-08 Hu?n luy?n model can nhà"
+			quid       	"6ADCBE5100BC"
+			label      	"UC-08 Hu?n luy?n model can nhà"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$13"
+			quid       	"6ADCBE5100BE"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$14"
+		quid       	"6ADCBE5100C0"
+		roles      	(list role_list
+		    (object Role "UC-09 Giám sát v? trí realtime"
+			quid       	"6ADCBE5100C1"
+			label      	"UC-09 Giám sát v? trí realtime"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$15"
+			quid       	"6ADCBE5100C3"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$16"
+		quid       	"6ADCBE5100C5"
+		roles      	(list role_list
+		    (object Role "UC-10 Xem so d? nhà + xác su?t"
+			quid       	"6ADCBE5100C6"
+			label      	"UC-10 Xem so d? nhà + xác su?t"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$17"
+			quid       	"6ADCBE5100C8"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$18"
+		quid       	"6ADCBE5100CA"
+		roles      	(list role_list
+		    (object Role "UC-11 Xem nh?p sinh ho?t"
+			quid       	"6ADCBE5100CB"
+			label      	"UC-11 Xem nh?p sinh ho?t"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$19"
+			quid       	"6ADCBE5100CD"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$20"
+		quid       	"6ADCBE5100CF"
+		roles      	(list role_list
+		    (object Role "UC-12 Ch?y demo d? li?u m?u"
+			quid       	"6ADCBE5100D0"
+			label      	"UC-12 Ch?y demo d? li?u m?u"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$21"
+			quid       	"6ADCBE5100D2"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$22"
+		quid       	"6ADCBE5100D4"
+		roles      	(list role_list
+		    (object Role "UC-15 Nh?n - xem c?nh báo"
+			quid       	"6ADCBE5100D5"
+			label      	"UC-15 Nh?n - xem c?nh báo"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$23"
+			quid       	"6ADCBE5100D7"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$24"
+		quid       	"6ADCBE5100D9"
+		roles      	(list role_list
+		    (object Role "UC-16 Xem k?t qu? th?c nghi?m"
+			quid       	"6ADCBE5100DA"
+			label      	"UC-16 Xem k?t qu? th?c nghi?m"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$25"
+			quid       	"6ADCBE5100DC"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$26"
+		quid       	"6ADCBE5100DE"
+		roles      	(list role_list
+		    (object Role "UC-17 Xu?t d? li?u scans CSV"
+			quid       	"6ADCBE5100DF"
+			label      	"UC-17 Xu?t d? li?u scans CSV"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$27"
+			quid       	"6ADCBE5100E1"
+			supplier   	"Use Case View::Ngu?i thân (Giám sát)"
+			quidu      	"6ADCBE510082")))
+	    (object Association "$UNNAMED$28"
+		quid       	"6ADCBE5100E3"
+		roles      	(list role_list
+		    (object Role "UC-06 Thu th?p fingerprint RSSI"
+			quid       	"6ADCBE5100E4"
+			label      	"UC-06 Thu th?p fingerprint RSSI"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$29"
+			quid       	"6ADCBE5100E6"
+			supplier   	"Use Case View::Android Collector"
+			quidu      	"6ADCBE510084")))
+	    (object Association "$UNNAMED$30"
+		quid       	"6ADCBE5100E8"
+		roles      	(list role_list
+		    (object Role "UC-13 G?i d? li?u gia t?c k?"
+			quid       	"6ADCBE5100E9"
+			label      	"UC-13 G?i d? li?u gia t?c k?"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$31"
+			quid       	"6ADCBE5100EB"
+			supplier   	"Use Case View::iPhone PWA"
+			quidu      	"6ADCBE510086")))
+	    (object Association "$UNNAMED$32"
+		quid       	"6ADCBE5100ED"
+		stereotype 	"include"
+		roles      	(list role_list
+		    (object Role "$UNNAMED$33"
+			quid       	"6ADCBE5100EE"
+			supplier   	"Use Case View::UC-06 Thu th?p fingerprint RSSI"
+			quidu      	"6ADCBE51008F"
+			is_navigable 	TRUE)
+		    (object Role "Xác th?c token thi?t b?"
+			quid       	"6ADCBE5100EF"
+			label      	"Xác th?c token thi?t b?"
+			supplier   	"association"
+			is_navigable 	TRUE)))
+	    (object Association "$UNNAMED$34"
+		quid       	"6ADCBE5100F3"
+		stereotype 	"include"
+		roles      	(list role_list
+		    (object Role "$UNNAMED$35"
+			quid       	"6ADCBE5100F4"
+			supplier   	"Use Case View::UC-09 Giám sát v? trí realtime"
+			quidu      	"6ADCBE510092"
+			is_navigable 	TRUE)
+		    (object Role "Ð?nh v? phòng (RoomNet-Lite + Bayesian)"
+			quid       	"6ADCBE5100F5"
+			label      	"Ð?nh v? phòng (RoomNet-Lite + Bayesian)"
+			supplier   	"association"
+			is_navigable 	TRUE)))
+	    (object Association "$UNNAMED$36"
+		quid       	"6ADCBE5100F9"
+		stereotype 	"extend"
+		roles      	(list role_list
+		    (object Role "$UNNAMED$37"
+			quid       	"6ADCBE5100FA"
+			supplier   	"Use Case View::UC-14 Phát hi?n nghi ng? té ngã"
+			quidu      	"6ADCBE510097"
+			is_navigable 	TRUE)
+		    (object Role "UC-13 G?i d? li?u gia t?c k?"
+			quid       	"6ADCBE5100FB"
+			label      	"UC-13 G?i d? li?u gia t?c k?"
+			supplier   	"association"
+			is_navigable 	TRUE)))
+	    (object Association "$UNNAMED$38"
+		quid       	"6ADCBE5100FF"
+		stereotype 	"extend"
+		roles      	(list role_list
+		    (object Role "$UNNAMED$39"
+			quid       	"6ADCBE510100"
+			supplier   	"Use Case View::UC-12 Ch?y demo d? li?u m?u"
+			quidu      	"6ADCBE510095"
+			is_navigable 	TRUE)
+		    (object Role "UC-09 Giám sát v? trí realtime"
+			quid       	"6ADCBE510101"
+			label      	"UC-09 Giám sát v? trí realtime"
+			supplier   	"association"
+			is_navigable 	TRUE)))
+	    (object Mechanism @1
+		logical_models 	(list unit_reference_list
+		    (object Object "AndroidCollector"
+			quid       	"6ADDF6E20302"
+			persistence 	"Transient"
+			creationObj 	FALSE
+			multi      	FALSE)
+		    (object Object "FlaskServer"
+			quid       	"6ADDF6E20303"
+			persistence 	"Transient"
+			creationObj 	FALSE
+			multi      	FALSE)
+		    (object Object "SmartHomeDatabase"
+			quid       	"6ADDF6E20304"
+			persistence 	"Transient"
+			creationObj 	FALSE
+			multi      	FALSE)))
+	    (object Mechanism @2
+		logical_models 	(list unit_reference_list
+		    (object Object "DashboardPWA"
+			quid       	"6ADDF6E20306"
+			persistence 	"Transient"
+			creationObj 	FALSE
+			multi      	FALSE)
+		    (object Object "FlaskServer"
+			quid       	"6ADDF6E20307"
+			persistence 	"Transient"
+			creationObj 	FALSE
+			multi      	FALSE)
+		    (object Object "InferenceEngine"
+			quid       	"6ADDF6E20308"
+			persistence 	"Transient"
+			creationObj 	FALSE
+			multi      	FALSE)
+		    (object Object "MobileSensorMonitor"
+			quid       	"6ADDF6E20309"
+			persistence 	"Transient"
+			creationObj 	FALSE
+			multi      	FALSE)))
+	    (object Mechanism @3
+		logical_models 	(list unit_reference_list
+		    (object Object "iPhonePWA"
+			quid       	"6ADDF6E2030B"
+			persistence 	"Transient"
+			creationObj 	FALSE
+			multi      	FALSE)
+		    (object Object "FlaskServer"
+			quid       	"6ADDF6E2030C"
+			persistence 	"Transient"
+			creationObj 	FALSE
+			multi      	FALSE)
+		    (object Object "MobileSensorMonitor"
+			quid       	"6ADDF6E2030D"
+			persistence 	"Transient"
+			creationObj 	FALSE
+			multi      	FALSE))))
+	logical_presentations 	(list unit_reference_list
+	    (object UseCaseDiagram "Main"
+		quid       	"6ADCBE4E0286"
+		title      	"Main"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))
+	    (object UseCaseDiagram "Phân tích thi?t k? h? th?ng"
+		quid       	"6ADCBE510081"
+		title      	"Phân tích thi?t k? h? th?ng"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))
+	    (object InteractionDiagram "SQ - Thu thap fingerprint"
+		mechanism_ref 	@1
+		quid       	"6ADDF6E20301"
+		title      	"SQ - Thu thap fingerprint"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))
+	    (object InteractionDiagram "SQ - Suy luan realtime + canh bao"
+		mechanism_ref 	@2
+		quid       	"6ADDF6E20305"
+		title      	"SQ - Suy luan realtime + canh bao"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))
+	    (object InteractionDiagram "SQ - Gia toc ke + te nga"
+		mechanism_ref 	@3
+		quid       	"6ADDF6E2030A"
+		title      	"SQ - Gia toc ke + te nga"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))))
+    root_category 	(object Class_Category "Logical View"
+	quid       	"6ADCBE4E0263"
+	exportControl 	"Public"
+	global     	TRUE
+	subsystem  	"Component View"
+	quidu      	"6ADCBE4E0265"
+	logical_models 	(list unit_reference_list
+	    (object Class "FlaskServer"
+		quid       	"6ADDF6E20295"
+		operations 	(list Operations
+		    (object Operation "collect()"
+			quid       	"6ADDF6E2029B"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "scan()"
+			quid       	"6ADDF6E2029C"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "sensor_update()"
+			quid       	"6ADDF6E2029D"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "status()"
+			quid       	"6ADDF6E2029E"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "health()"
+			quid       	"6ADDF6E2029F"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "join_home()"
+			quid       	"6ADDF6E202A0"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0))
+		class_attributes 	(list class_attribute_list
+		    (object ClassAttribute "cfg"
+			quid       	"6ADDF6E20296"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "db"
+			quid       	"6ADDF6E20297"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "home_engines"
+			quid       	"6ADDF6E20298"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "sensor_monitors"
+			quid       	"6ADDF6E20299"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "alert_throttle"
+			quid       	"6ADDF6E2029A"
+			type       	"String"
+			exportControl 	"Public")))
+	    (object Class "SmartHomeDatabase"
+		quid       	"6ADDF6E202A1"
+		operations 	(list Operations
+		    (object Operation "record_wifi_scan()"
+			quid       	"6ADDF6E202A4"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "save_prediction()"
+			quid       	"6ADDF6E202A5"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "save_alert()"
+			quid       	"6ADDF6E202A6"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "update_device_scan_status()"
+			quid       	"6ADDF6E202A7"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "resolve_device_alerts()"
+			quid       	"6ADDF6E202A8"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "join_home_by_code()"
+			quid       	"6ADDF6E202A9"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0))
+		class_attributes 	(list class_attribute_list
+		    (object ClassAttribute "path"
+			quid       	"6ADDF6E202A2"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "schema_version"
+			quid       	"6ADDF6E202A3"
+			type       	"String"
+			exportControl 	"Public")))
+	    (object Class "SmartHomeInferenceEngine"
+		quid       	"6ADDF6E202AA"
+		operations 	(list Operations
+		    (object Operation "process_scan()"
+			quid       	"6ADDF6E202AE"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "status()"
+			quid       	"6ADDF6E202AF"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "reset()"
+			quid       	"6ADDF6E202B0"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0))
+		class_attributes 	(list class_attribute_list
+		    (object ClassAttribute "room_model"
+			quid       	"6ADDF6E202AB"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "anomaly_model"
+			quid       	"6ADDF6E202AC"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "topology"
+			quid       	"6ADDF6E202AD"
+			type       	"String"
+			exportControl 	"Public")))
+	    (object Class "RoomNetLite"
+		quid       	"6ADDF6E202B1"
+		operations 	(list Operations
+		    (object Operation "forward()"
+			quid       	"6ADDF6E202B7"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0))
+		class_attributes 	(list class_attribute_list
+		    (object ClassAttribute "stem"
+			quid       	"6ADDF6E202B2"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "depthwise"
+			quid       	"6ADDF6E202B3"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "pointwise"
+			quid       	"6ADDF6E202B4"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "embedding"
+			quid       	"6ADDF6E202B5"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "classifier"
+			quid       	"6ADDF6E202B6"
+			type       	"String"
+			exportControl 	"Public")))
+	    (object Class "GRUAutoencoder"
+		quid       	"6ADDF6E202B8"
+		operations 	(list Operations
+		    (object Operation "forward()"
+			quid       	"6ADDF6E202BC"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "reconstruction_error()"
+			quid       	"6ADDF6E202BD"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0))
+		class_attributes 	(list class_attribute_list
+		    (object ClassAttribute "encoder"
+			quid       	"6ADDF6E202B9"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "decoder"
+			quid       	"6ADDF6E202BA"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "threshold"
+			quid       	"6ADDF6E202BB"
+			type       	"String"
+			exportControl 	"Public")))
+	    (object Class "MobileSensorMonitor"
+		quid       	"6ADDF6E202BE"
+		operations 	(list Operations
+		    (object Operation "update()"
+			quid       	"6ADDF6E202C2"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "status()"
+			quid       	"6ADDF6E202C3"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "reset()"
+			quid       	"6ADDF6E202C4"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0))
+		class_attributes 	(list class_attribute_list
+		    (object ClassAttribute "state"
+			quid       	"6ADDF6E202BF"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "alerts"
+			quid       	"6ADDF6E202C0"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "impact_threshold"
+			quid       	"6ADDF6E202C1"
+			type       	"String"
+			exportControl 	"Public"))
+		statemachine 	(object State_Machine ""
+		    quid       	"6ADDF6E2030E"
+		    states     	(list States
+			(object State "NO_DATA"
+			    quid       	"6ADDF6E20311"
+			    type       	"Normal")
+			(object State "MOVING"
+			    quid       	"6ADDF6E20312"
+			    type       	"Normal")
+			(object State "STILL"
+			    quid       	"6ADDF6E20313"
+			    type       	"Normal")
+			(object State "IMPACT_RECORDED"
+			    quid       	"6ADDF6E20314"
+			    type       	"Normal"))
+		    partitions 	(list Partitions)
+		    objects    	(list Objects)
+		    transitions 	(list transition_list)
+		    objectflows 	(list objectflow_list)
+		    statediagrams 	(list StateDiagrams
+			(object State_Diagram "NewDiagram"
+			    quid       	"6ADDF6E2030F"
+			    title      	"NewDiagram"
+			    zoom       	100
+			    max_height 	28350
+			    max_width  	21600
+			    origin_x   	0
+			    origin_y   	0
+			    items      	(list diagram_item_list))
+			(object State_Diagram "Trang thai MobileSensorMonitor"
+			    quid       	"6ADDF6E20315"
+			    title      	"Trang thai MobileSensorMonitor"
+			    zoom       	100
+			    max_height 	28350
+			    max_width  	21600
+			    origin_x   	0
+			    origin_y   	0
+			    items      	(list diagram_item_list
+				(object StateView "Normal" "NO_DATA" @4
+				    location   	(210, 187)
+				    font       	(object Font
+					size       	10
+					face       	"Arial"
+					bold       	FALSE
+					italics    	FALSE
+					underline  	FALSE
+					strike     	FALSE
+					color      	0
+					default_color 	TRUE)
+				    label      	(object ItemLabel
+					Parent_View 	@4
+					location   	(210, 176)
+					fill_color 	13434879
+					anchor_loc 	1
+					nlines     	2
+					max_width  	174
+					justify    	0
+					label      	"NO_DATA")
+				    icon_style 	"Icon"
+				    line_color 	3342489
+				    fill_color 	13434879
+				    quidu      	"6ADDF6E20311"
+				    autoResize 	TRUE)
+				(object StateView "Normal" "MOVING" @5
+				    location   	(660, 187)
+				    font       	(object Font
+					size       	10
+					face       	"Arial"
+					bold       	FALSE
+					italics    	FALSE
+					underline  	FALSE
+					strike     	FALSE
+					color      	0
+					default_color 	TRUE)
+				    label      	(object ItemLabel
+					Parent_View 	@5
+					location   	(660, 176)
+					fill_color 	13434879
+					anchor_loc 	1
+					nlines     	2
+					max_width  	174
+					justify    	0
+					label      	"MOVING")
+				    icon_style 	"Icon"
+				    line_color 	3342489
+				    fill_color 	13434879
+				    quidu      	"6ADDF6E20312"
+				    autoResize 	TRUE)
+				(object StateView "Normal" "STILL" @6
+				    location   	(1110, 187)
+				    font       	(object Font
+					size       	10
+					face       	"Arial"
+					bold       	FALSE
+					italics    	FALSE
+					underline  	FALSE
+					strike     	FALSE
+					color      	0
+					default_color 	TRUE)
+				    label      	(object ItemLabel
+					Parent_View 	@6
+					location   	(1110, 176)
+					fill_color 	13434879
+					anchor_loc 	1
+					nlines     	2
+					max_width  	174
+					justify    	0
+					label      	"STILL")
+				    icon_style 	"Icon"
+				    line_color 	3342489
+				    fill_color 	13434879
+				    quidu      	"6ADDF6E20313"
+				    autoResize 	TRUE)
+				(object StateView "Normal" "IMPACT_RECORDED" @7
+				    location   	(1560, 187)
+				    font       	(object Font
+					size       	10
+					face       	"Arial"
+					bold       	FALSE
+					italics    	FALSE
+					underline  	FALSE
+					strike     	FALSE
+					color      	0
+					default_color 	TRUE)
+				    label      	(object ItemLabel
+					Parent_View 	@7
+					location   	(1560, 176)
+					fill_color 	13434879
+					anchor_loc 	1
+					nlines     	2
+					max_width  	174
+					justify    	0
+					label      	"IMPACT_RECORDED")
+				    icon_style 	"Icon"
+				    line_color 	3342489
+				    fill_color 	13434879
+				    quidu      	"6ADDF6E20314"
+				    autoResize 	TRUE))))))
+	    (object Class "AlertThrottle"
+		quid       	"6ADDF6E202C5"
+		operations 	(list Operations
+		    (object Operation "should_emit()"
+			quid       	"6ADDF6E202C8"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "reset()"
+			quid       	"6ADDF6E202C9"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0))
+		class_attributes 	(list class_attribute_list
+		    (object ClassAttribute "last"
+			quid       	"6ADDF6E202C6"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "cooldown_seconds"
+			quid       	"6ADDF6E202C7"
+			type       	"String"
+			exportControl 	"Public")))
+	    (object Class "CollectorService (Android)"
+		quid       	"6ADDF6E202CA"
+		operations 	(list Operations
+		    (object Operation "request_scan()"
+			quid       	"6ADDF6E202CE"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "handle_scan_results()"
+			quid       	"6ADDF6E202CF"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "send_acceleration()"
+			quid       	"6ADDF6E202D0"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0))
+		class_attributes 	(list class_attribute_list
+		    (object ClassAttribute "mode"
+			quid       	"6ADDF6E202CB"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "device_id"
+			quid       	"6ADDF6E202CC"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "interval_seconds"
+			quid       	"6ADDF6E202CD"
+			type       	"String"
+			exportControl 	"Public")))
+	    (object Class "DashboardPWA"
+		quid       	"6ADDF6E202D1"
+		operations 	(list Operations
+		    (object Operation "refresh_dashboard()"
+			quid       	"6ADDF6E202D4"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "render_status()"
+			quid       	"6ADDF6E202D5"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0)
+		    (object Operation "render_devices()"
+			quid       	"6ADDF6E202D6"
+			result     	"void"
+			concurrency 	"Sequential"
+			opExportControl 	"Public"
+			uid        	0))
+		class_attributes 	(list class_attribute_list
+		    (object ClassAttribute "state"
+			quid       	"6ADDF6E202D2"
+			type       	"String"
+			exportControl 	"Public")
+		    (object ClassAttribute "poll_timer"
+			quid       	"6ADDF6E202D3"
+			type       	"String"
+			exportControl 	"Public")))
+	    (object Association "$UNNAMED$40"
+		quid       	"6ADDF6E202D7"
+		roles      	(list role_list
+		    (object Role "SmartHomeDatabase"
+			quid       	"6ADDF6E202D8"
+			label      	"SmartHomeDatabase"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$41"
+			quid       	"6ADDF6E202DA"
+			supplier   	"Logical View::FlaskServer"
+			quidu      	"6ADDF6E20295")))
+	    (object Association "$UNNAMED$42"
+		quid       	"6ADDF6E202DC"
+		roles      	(list role_list
+		    (object Role "SmartHomeInferenceEngine"
+			quid       	"6ADDF6E202DD"
+			label      	"SmartHomeInferenceEngine"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$43"
+			quid       	"6ADDF6E202DF"
+			supplier   	"Logical View::FlaskServer"
+			quidu      	"6ADDF6E20295")))
+	    (object Association "$UNNAMED$44"
+		quid       	"6ADDF6E202E1"
+		roles      	(list role_list
+		    (object Role "MobileSensorMonitor"
+			quid       	"6ADDF6E202E2"
+			label      	"MobileSensorMonitor"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$45"
+			quid       	"6ADDF6E202E4"
+			supplier   	"Logical View::FlaskServer"
+			quidu      	"6ADDF6E20295")))
+	    (object Association "$UNNAMED$46"
+		quid       	"6ADDF6E202E6"
+		roles      	(list role_list
+		    (object Role "AlertThrottle"
+			quid       	"6ADDF6E202E7"
+			label      	"AlertThrottle"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$47"
+			quid       	"6ADDF6E202E9"
+			supplier   	"Logical View::FlaskServer"
+			quidu      	"6ADDF6E20295")))
+	    (object Association "$UNNAMED$48"
+		quid       	"6ADDF6E202EB"
+		roles      	(list role_list
+		    (object Role "RoomNetLite"
+			quid       	"6ADDF6E202EC"
+			label      	"RoomNetLite"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$49"
+			quid       	"6ADDF6E202EE"
+			supplier   	"Logical View::SmartHomeInferenceEngine"
+			quidu      	"6ADDF6E202AA")))
+	    (object Association "$UNNAMED$50"
+		quid       	"6ADDF6E202F0"
+		roles      	(list role_list
+		    (object Role "GRUAutoencoder"
+			quid       	"6ADDF6E202F1"
+			label      	"GRUAutoencoder"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$51"
+			quid       	"6ADDF6E202F3"
+			supplier   	"Logical View::SmartHomeInferenceEngine"
+			quidu      	"6ADDF6E202AA")))
+	    (object Association "$UNNAMED$52"
+		quid       	"6ADDF6E202F5"
+		stereotype 	"uses"
+		roles      	(list role_list
+		    (object Role "FlaskServer"
+			quid       	"6ADDF6E202F6"
+			label      	"FlaskServer"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$53"
+			quid       	"6ADDF6E202F8"
+			supplier   	"Logical View::CollectorService (Android)"
+			quidu      	"6ADDF6E202CA")))
+	    (object Association "$UNNAMED$54"
+		quid       	"6ADDF6E202FB"
+		stereotype 	"uses"
+		roles      	(list role_list
+		    (object Role "FlaskServer"
+			quid       	"6ADDF6E202FC"
+			label      	"FlaskServer"
+			supplier   	"association"
+			is_navigable 	TRUE)
+		    (object Role "$UNNAMED$55"
+			quid       	"6ADDF6E202FE"
+			supplier   	"Logical View::DashboardPWA"
+			quidu      	"6ADDF6E202D1"))))
+	logical_presentations 	(list unit_reference_list
+	    (object ClassDiagram "Main"
+		quid       	"6ADCBE4E0279"
+		title      	"Main"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))
+	    (object ClassDiagram "Phân tích l?p h? th?ng"
+		quid       	"6ADDF6E20294"
+		title      	"Phân tích l?p h? th?ng"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))))
+    root_subsystem 	(object SubSystem "Component View"
+	quid       	"6ADCBE4E0265"
+	physical_models 	(list unit_reference_list)
+	physical_presentations 	(list unit_reference_list
+	    (object Module_Diagram "Main"
+		quid       	"6ADCBE4E0285"
+		title      	"Main"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list)))
+	category   	"Logical View"
+	quidu      	"6ADCBE4E0263")
+    process_structure 	(object Processes
+	quid       	"6ADCBE4E0266"
+	ProcsNDevs 	(list
+	    (object Processor "May chu (laptop)"
+		quid       	"6ADDF6E20316"
+		characteristics 	""
+		scheduling 	"Preemptive"
+		processes  	(list processes))
+	    (object Device "Dien thoai Android"
+		quid       	"6ADDF6E20317"
+		characteristics 	"")
+	    (object Device "iPhone"
+		quid       	"6ADDF6E20318"
+		characteristics 	"")
+	    (object Device "Router WiFi"
+		quid       	"6ADDF6E20319"
+		characteristics 	"")
+	    (object Process_Diagram "Deployment View"
+		quid       	"6ADCBE4E0268"
+		title      	"Deployment View"
+		zoom       	100
+		max_height 	28350
+		max_width  	21600
+		origin_x   	0
+		origin_y   	0
+		items      	(list diagram_item_list))))
+    properties 	(object Properties
+	quid       	"6ADCBE4E0267"))
