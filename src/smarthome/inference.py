@@ -9,11 +9,57 @@ import torch
 import torch.nn.functional as F
 
 from .preprocessing import RSSIPreprocessor
-from .models import RoomNetLite, GRUAutoencoder
+from .models import RoomNetLite, RoomNetMT, SimpleCNN, GRUAutoencoder, ACTIVITY_LABELS
 from .topology import TopologyFilter
 from .dataset import AnomalyFeatureBuilder
 from .anomaly import RuleEngine, OnlineAnomalyDetector, fuse_alert, MobileSensorFusion, MobileSensorEvent
 from .activity import ActivityMonitor
+
+# Model phân loại phòng: torch candidates nạp từ .pt, sklearn candidates nạp
+# từ .joblib (ensemble meta-learning — xem scripts/train_ensemble.py).
+TORCH_ROOM_MODELS = {
+    "RoomNetLite": ("roomnet_lite.pt", RoomNetLite),
+    "SimpleCNN": ("simple_cnn.pt", SimpleCNN),
+    "RoomNetMT": ("roomnet_mt.pt", RoomNetMT),
+}
+
+
+def _load_room_model(artifact_dir, config, rooms, feature_dim, device):
+    """Nạp model phòng theo ``model_choice.json`` (mặc định RoomNetLite).
+
+    Trả về ``(kind, model)``: kind là tên candidate; model là nn.Module (torch)
+    hoặc sklearn estimator (có ``predict_proba``).
+    """
+    choice_path = Path(artifact_dir) / "model_choice.json"
+    chosen = "RoomNetLite"
+    if choice_path.exists():
+        try:
+            chosen = str(json.loads(choice_path.read_text(encoding="utf-8")).get("chosen", "RoomNetLite"))
+        except (OSError, ValueError):
+            chosen = "RoomNetLite"
+
+    if chosen in TORCH_ROOM_MODELS:
+        artifact, model_cls = TORCH_ROOM_MODELS[chosen]
+        room_cfg = config["room_model"]
+        model = model_cls(
+            in_channels=feature_dim,
+            num_rooms=len(rooms),
+            hidden_channels=int(room_cfg["hidden_channels"]),
+            embedding_dim=int(room_cfg["embedding_dim"]),
+            dropout=float(room_cfg["dropout"]),
+        ).to(device)
+        model_path = Path(artifact_dir) / artifact
+        model.load_state_dict(torch.load(model_path, map_location=device))
+        model.eval()
+        return chosen, model
+
+    # Sklearn candidate: artifact do train_ensemble.py lưu.
+    import joblib
+
+    model_path = Path(artifact_dir) / f"model_{chosen}.joblib"
+    if not model_path.exists():
+        raise FileNotFoundError(f"Thiếu artifact cho model được chọn: {model_path}")
+    return chosen, joblib.load(model_path)
 
 
 class SmartHomeInferenceEngine:
@@ -24,16 +70,31 @@ class SmartHomeInferenceEngine:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
         self.preprocessor = RSSIPreprocessor.load(self.artifact_dir / "preprocessor.json")
-        room_cfg = config["room_model"]
-        self.room_model = RoomNetLite(
-            in_channels=self.preprocessor.feature_dim,
-            num_rooms=len(self.rooms),
-            hidden_channels=int(room_cfg["hidden_channels"]),
-            embedding_dim=int(room_cfg["embedding_dim"]),
-            dropout=float(room_cfg["dropout"]),
-        ).to(self.device)
-        self.room_model.load_state_dict(torch.load(self.artifact_dir / "roomnet_lite.pt", map_location=self.device))
-        self.room_model.eval()
+        self.model_choice, room_model = _load_room_model(
+            self.artifact_dir, config, self.rooms, self.preprocessor.feature_dim, self.device
+        )
+        self.room_model = room_model
+        self.sklearn_model = None if hasattr(room_model, "forward") else room_model
+
+        # Head hoạt động của RoomNet-MT: dùng ngay room_model nếu selected là
+        # RoomNetMT; nếu chọn model khác nhưng roomnet_mt.pt tồn tại thì nạp
+        # riêng chỉ để dự đoán hoạt động (bộ luật vẫn là driver cảnh báo).
+        self.activity_model: RoomNetMT | None = None
+        if isinstance(self.room_model, RoomNetMT):
+            self.activity_model = self.room_model
+        else:
+            mt_path = self.artifact_dir / "roomnet_mt.pt"
+            if mt_path.exists():
+                mt_cfg = config["room_model"]
+                self.activity_model = RoomNetMT(
+                    in_channels=self.preprocessor.feature_dim,
+                    num_rooms=len(self.rooms),
+                    hidden_channels=int(mt_cfg["hidden_channels"]),
+                    embedding_dim=int(mt_cfg["embedding_dim"]),
+                    dropout=float(mt_cfg["dropout"]),
+                ).to(self.device)
+                self.activity_model.load_state_dict(torch.load(mt_path, map_location=self.device))
+                self.activity_model.eval()
 
         self.window_size = int(config["data"]["window_size"])
         self.rssi_buffer = deque(maxlen=self.window_size)
@@ -153,12 +214,35 @@ class SmartHomeInferenceEngine:
 
         x = np.stack(self.rssi_buffer).T
         xt = torch.tensor(x, dtype=torch.float32, device=self.device).unsqueeze(0)
-        logits, _ = self.room_model(xt)
-        raw_probs = F.softmax(logits, dim=-1).squeeze(0).cpu().numpy()
+        if self.sklearn_model is not None:
+            # Sklearn candidates được huấn luyện trên cửa sổ duỗi phẳng
+            # (features-major) — cùng thứ tự với to_xy lúc huấn luyện.
+            proba = self.sklearn_model.predict_proba(xt.reshape(1, -1).cpu().numpy())[0]
+            raw_probs = np.zeros(len(self.rooms), dtype=np.float64)
+            for cls_idx, prob in zip(self.sklearn_model.classes_, proba):
+                raw_probs[int(cls_idx)] = float(prob)
+        else:
+            out = self.room_model(xt)
+            raw_probs = F.softmax(out[0], dim=-1).squeeze(0).cpu().numpy()
         smooth_probs = self.topology_filter.update(raw_probs)
         room_idx = int(np.argmax(smooth_probs))
         room = self.rooms[room_idx]
         confidence = float(smooth_probs[room_idx])
+
+        # Head hoạt động của RoomNet-MT (nếu có): chỉ báo thêm, bộ luật
+        # ActivityMonitor vẫn là nguồn quyết định cảnh báo. Khi room model
+        # chính là MT, không chạy forward thứ hai — tái dùng logits vừa tính.
+        activity_model_state = None
+        if self.activity_model is not None:
+            if isinstance(self.room_model, RoomNetMT):
+                act_logits = out[2]
+            else:
+                act_logits = self.activity_model(xt)[2]
+            act_probs = F.softmax(act_logits, dim=-1).squeeze(0).detach().cpu().numpy()
+            activity_model_state = {
+                "state": ACTIVITY_LABELS[int(np.argmax(act_probs))],
+                "probabilities": {name: float(p) for name, p in zip(ACTIVITY_LABELS, act_probs)},
+            }
 
         previous_room = self.current_room
         previous_since = self.room_since
@@ -224,6 +308,8 @@ class SmartHomeInferenceEngine:
             },
             "monitoring_minutes": max(0.0, (timestamp - (self.started_at or timestamp)) / 60.0),
         }
+        if activity_model_state is not None:
+            event["activity_model"] = activity_model_state
         self.history.append(event)
         if alert.status in {"WARNING", "CRITICAL"}:
             self.alerts.append(event)

@@ -8,10 +8,15 @@ import secrets
 import threading
 import time
 
-from flask import Response
+from flask import Response, session as flask_session
 from werkzeug.security import generate_password_hash
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Hạn tối đa của một phiên đăng nhập (giờ). Cookie Flask chỉ được ký chứ
+# không có hạn phía server, nên cookie bị đánh cắp dùng được mãi; đặt
+# SMART_HOME_SESSION_MAX_AGE_HOURS=0 để tắt (không khuyến khích).
+SESSION_MAX_AGE_HOURS = float(os.getenv("SMART_HOME_SESSION_MAX_AGE_HOURS", "168") or 0)
 
 
 def resolve_secret_key() -> str:

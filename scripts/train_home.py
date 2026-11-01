@@ -109,6 +109,8 @@ def main():
         commands = [
             [sys.executable, str(ROOT / "scripts" / "prepare_data.py"), "--config", str(config_path), "--input", str(raw_csv), "--out-dir", str(processed_dir), "--models-dir", str(model_dir)],
             [sys.executable, str(ROOT / "scripts" / "train_room.py"), "--config", str(config_path), "--processed-dir", str(processed_dir), "--models-dir", str(model_dir)],
+            [sys.executable, str(ROOT / "scripts" / "train_room_mt.py"), "--config", str(config_path), "--processed-dir", str(processed_dir), "--models-dir", str(model_dir)],
+            [sys.executable, str(ROOT / "scripts" / "train_ensemble.py"), "--config", str(config_path), "--processed-dir", str(processed_dir), "--models-dir", str(model_dir)],
             [sys.executable, str(ROOT / "scripts" / "evaluate_room.py"), "--config", str(config_path), "--processed-dir", str(processed_dir), "--models-dir", str(model_dir)],
         ]
         if args.epochs:

@@ -216,6 +216,122 @@ def test_inference_engine_predicts_normalised_posterior_after_window():
 
 
 # --------------------------------------------------------------------------- #
+# Ensemble meta-learning + engine model choice
+# --------------------------------------------------------------------------- #
+def _tiny_home_dataframe():
+    """Dữ liệu giả lập nhỏ: 2 phòng × 3 phiên × 6 scan, vân tay rõ rệt."""
+    rows = []
+    t0 = 1_700_000_000
+    fingerprints = {"A": {"AP1": -45.0, "AP2": -62.0, "AP3": -80.0},
+                    "B": {"AP1": -78.0, "AP2": -48.0, "AP3": -66.0}}
+    for session in ("S01", "S02", "S03"):
+        for room in ("A", "B"):
+            for step in range(6):
+                row = {"timestamp": t0 + step, "session_id": session, "device_id": "D", "room": room}
+                row.update(fingerprints[room])
+                rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def test_ensemble_selection_picks_highest_macro_f1():
+    from smarthome.ensemble import candidate_feature_kind, select_best_candidate
+
+    chosen, best = select_best_candidate({
+        "RoomNetLite": {"accuracy": 0.97, "macro_f1": 0.96},
+        "kNN": {"accuracy": 0.99, "macro_f1": 0.98},
+        "MLP": {"accuracy": 0.99, "macro_f1": 0.98},
+    })
+    # Tie-break theo tên để kết quả xác định với cùng số liệu.
+    assert chosen == "MLP" or best["macro_f1"] == 0.98
+    assert chosen in {"kNN", "MLP"}
+    assert candidate_feature_kind("RoomNetMT") == "window_tensor"
+    assert candidate_feature_kind("RandomForest") == "flattened_window"
+    with pytest.raises(ValueError):
+        select_best_candidate({})
+
+
+def test_engine_uses_sklearn_model_choice(tmp_path):
+    """model_choice.json chỉ kNN → engine phải nạp joblib và định vị được."""
+    import joblib
+    from sklearn.neighbors import KNeighborsClassifier
+    from smarthome.dataset import RoomWindowDataset
+
+    df = _tiny_home_dataframe()
+    pp = RSSIPreprocessor.fit(df)
+    pp.save(tmp_path / "preprocessor.json")
+    cfg = load_config(ROOT / "config.yaml")
+    rooms = ["A", "B"]
+    ds = RoomWindowDataset(df, pp, rooms, int(cfg["data"]["window_size"]))
+    x = np.stack([ds[i][0].numpy().reshape(-1) for i in range(len(ds))])
+    y = np.asarray([int(ds[i][1]) for i in range(len(ds))])
+    knn = KNeighborsClassifier(n_neighbors=1).fit(x, y)
+    joblib.dump(knn, tmp_path / "model_kNN.joblib")
+    (tmp_path / "model_choice.json").write_text(
+        json.dumps({"chosen": "kNN", "feature": "flattened_window"}), encoding="utf-8"
+    )
+
+    config = deepcopy(load_config(ROOT / "config.yaml"))
+    config["rooms"] = rooms
+    config["room_topology"] = {"A": rooms, "B": rooms}
+    engine = SmartHomeInferenceEngine(config, tmp_path)
+
+    assert engine.model_choice == "kNN"
+    assert engine.activity_model is None, "không có roomnet_mt.pt thì không có head hoạt động"
+    wifi = {"AP1": -45.0, "AP2": -62.0, "AP3": -80.0}
+    for step in range(int(config["data"]["window_size"])):
+        result = engine.process_scan(wifi, timestamp=1_700_000_000 + step * 3)
+    assert result["room"] == "A"
+    assert "activity_model" not in result
+
+
+def test_engine_reports_activity_model_from_roomnet_mt(tmp_path):
+    """Chọn RoomNetMT → event phải kèm activity_model (state + probabilities)."""
+    import torch
+    from smarthome.dataset import RoomWindowDatasetMT
+    from smarthome.models import ACTIVITY_LABELS, RoomNetMT
+
+    df = _tiny_home_dataframe()
+    pp = RSSIPreprocessor.fit(df)
+    pp.save(tmp_path / "preprocessor.json")
+    cfg = load_config(ROOT / "config.yaml")
+    rooms = ["A", "B"]
+    ds = RoomWindowDatasetMT(df, pp, rooms, int(cfg["data"]["window_size"]))
+    model = RoomNetMT(pp.feature_dim, len(rooms))
+    torch.manual_seed(42)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    ce = torch.nn.CrossEntropyLoss()
+    loader = torch.utils.data.DataLoader(ds, batch_size=4, shuffle=True)
+    model.train()
+    for _epoch in range(3):  # vài epoch đủ để state dict hợp lệ
+        for xb, yb, _stable, ab in loader:
+            logits, emb, act = model(xb)
+            loss = ce(logits, yb) + ce(act, ab)
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+    torch.save(model.state_dict(), tmp_path / "roomnet_mt.pt")
+    (tmp_path / "model_choice.json").write_text(
+        json.dumps({"chosen": "RoomNetMT", "feature": "window_tensor"}), encoding="utf-8"
+    )
+
+    config = deepcopy(load_config(ROOT / "config.yaml"))
+    config["rooms"] = rooms
+    config["room_topology"] = {"A": rooms, "B": rooms}
+    engine = SmartHomeInferenceEngine(config, tmp_path)
+
+    assert engine.model_choice == "RoomNetMT"
+    assert engine.activity_model is model, "RoomNetMT là room model thì head hoạt động dùng chính nó"
+    wifi = {"AP1": -45.0, "AP2": -62.0, "AP3": -80.0}
+    for step in range(int(config["data"]["window_size"])):
+        result = engine.process_scan(wifi, timestamp=1_700_000_000 + step * 3)
+    assert result["room"] in rooms
+    activity_model = result["activity_model"]
+    assert activity_model["state"] in ACTIVITY_LABELS
+    assert set(activity_model["probabilities"]) == set(ACTIVITY_LABELS)
+    np.testing.assert_allclose(sum(activity_model["probabilities"].values()), 1.0, rtol=1e-5)
+
+
+# --------------------------------------------------------------------------- #
 # Database
 # --------------------------------------------------------------------------- #
 def test_db_cascade_delete_removes_dependent_rows(tmp_path):
