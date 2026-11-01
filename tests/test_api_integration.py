@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -355,7 +356,9 @@ def create_share(client, home_id):
     return response.get_json()["share"]["code"]
 
 
-def login_as(client, email, password="TEST_PASSWORD_PLACEHOLDER"):
+def login_as(client, email, password=None):
+    if password is None:
+        password = os.environ.get("TEST_PASSWORD", "TEST_PASSWORD_PLACEHOLDER")
     assert client.post("/api/auth/login", json={"email": email, "password": password}).status_code == 200
 
 

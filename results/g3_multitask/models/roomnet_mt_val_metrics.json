@@ -1,0 +1,122 @@
+{
+  "room_metrics": {
+    "accuracy": 0.9899328859060402,
+    "macro_f1": 0.9899712452693009,
+    "confusion_matrix": [
+      [
+        116,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        119,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        2,
+        118,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        119,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        2,
+        118
+      ]
+    ],
+    "classification_report": {
+      "Bedroom": {
+        "precision": 0.9914529914529915,
+        "recall": 1.0,
+        "f1-score": 0.9957081545064378,
+        "support": 116.0
+      },
+      "Corridor": {
+        "precision": 0.9834710743801653,
+        "recall": 0.9916666666666667,
+        "f1-score": 0.9875518672199171,
+        "support": 120.0
+      },
+      "Bathroom": {
+        "precision": 0.9915966386554622,
+        "recall": 0.9833333333333333,
+        "f1-score": 0.9874476987447699,
+        "support": 120.0
+      },
+      "LivingRoom": {
+        "precision": 0.9834710743801653,
+        "recall": 0.9916666666666667,
+        "f1-score": 0.9875518672199171,
+        "support": 120.0
+      },
+      "Kitchen": {
+        "precision": 1.0,
+        "recall": 0.9833333333333333,
+        "f1-score": 0.9915966386554622,
+        "support": 120.0
+      },
+      "accuracy": 0.9899328859060402,
+      "macro avg": {
+        "precision": 0.9899983557737568,
+        "recall": 0.99,
+        "f1-score": 0.9899712452693009,
+        "support": 596.0
+      },
+      "weighted avg": {
+        "precision": 0.9899885931181915,
+        "recall": 0.9899328859060402,
+        "f1-score": 0.9899327425227428,
+        "support": 596.0
+      }
+    }
+  },
+  "activity_agreement": 0.9731543624161074,
+  "activity_confusion": [
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      580,
+      0
+    ],
+    [
+      0,
+      0,
+      16,
+      0
+    ]
+  ],
+  "activity_labels": [
+    "STILL",
+    "LIGHT_ACTIVITY",
+    "MOVING",
+    "ROOM_CHANGE"
+  ],
+  "epochs_trained": 8
+}

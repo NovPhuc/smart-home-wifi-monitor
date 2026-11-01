@@ -1,0 +1,276 @@
+{
+  "candidates": {
+    "RoomNetLite": {
+      "accuracy": 0.988255033557047,
+      "macro_f1": 0.9882622665746152,
+      "confusion_matrix": [
+        [
+          116,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          118,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          117,
+          0,
+          1
+        ],
+        [
+          0,
+          0,
+          0,
+          120,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          2,
+          118
+        ]
+      ],
+      "classification_report": {
+        "Bedroom": {
+          "precision": 0.9830508474576272,
+          "recall": 1.0,
+          "f1-score": 0.9914529914529915,
+          "support": 116.0
+        },
+        "Corridor": {
+          "precision": 0.9833333333333333,
+          "recall": 0.9833333333333333,
+          "f1-score": 0.9833333333333333,
+          "support": 120.0
+        },
+        "Bathroom": {
+          "precision": 1.0,
+          "recall": 0.975,
+          "f1-score": 0.9873417721518988,
+          "support": 120.0
+        },
+        "LivingRoom": {
+          "precision": 0.9836065573770492,
+          "recall": 1.0,
+          "f1-score": 0.9917355371900827,
+          "support": 120.0
+        },
+        "Kitchen": {
+          "precision": 0.9915966386554622,
+          "recall": 0.9833333333333333,
+          "f1-score": 0.9874476987447699,
+          "support": 120.0
+        },
+        "accuracy": 0.988255033557047,
+        "macro avg": {
+          "precision": 0.9883174753646944,
+          "recall": 0.9883333333333333,
+          "f1-score": 0.9882622665746152,
+          "support": 596.0
+        },
+        "weighted avg": {
+          "precision": 0.9883528218607149,
+          "recall": 0.988255033557047,
+          "f1-score": 0.9882408523136866,
+          "support": 596.0
+        }
+      }
+    },
+    "SimpleCNN": {
+      "accuracy": 0.9865771812080537,
+      "macro_f1": 0.9866026594982948,
+      "confusion_matrix": [
+        [
+          116,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          119,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          2,
+          117,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          1,
+          119,
+          0
+        ],
+        [
+          0,
+          0,
+          2,
+          1,
+          117
+        ]
+      ],
+      "classification_report": {
+        "Bedroom": {
+          "precision": 0.9830508474576272,
+          "recall": 1.0,
+          "f1-score": 0.9914529914529915,
+          "support": 116.0
+        },
+        "Corridor": {
+          "precision": 0.9834710743801653,
+          "recall": 0.9916666666666667,
+          "f1-score": 0.9875518672199171,
+          "support": 120.0
+        },
+        "Bathroom": {
+          "precision": 0.975,
+          "recall": 0.975,
+          "f1-score": 0.975,
+          "support": 120.0
+        },
+        "LivingRoom": {
+          "precision": 0.9916666666666667,
+          "recall": 0.9916666666666667,
+          "f1-score": 0.9916666666666667,
+          "support": 120.0
+        },
+        "Kitchen": {
+          "precision": 1.0,
+          "recall": 0.975,
+          "f1-score": 0.9873417721518988,
+          "support": 120.0
+        },
+        "accuracy": 0.9865771812080537,
+        "macro avg": {
+          "precision": 0.9866377177008918,
+          "recall": 0.9866666666666667,
+          "f1-score": 0.9866026594982948,
+          "support": 596.0
+        },
+        "weighted avg": {
+          "precision": 0.9866617906555446,
+          "recall": 0.9865771812080537,
+          "f1-score": 0.9865701069348405,
+          "support": 596.0
+        }
+      }
+    },
+    "RoomNetMT": {
+      "accuracy": 0.9899328859060402,
+      "macro_f1": 0.9899712452693009,
+      "confusion_matrix": [
+        [
+          116,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          119,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          118,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          1,
+          119,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          2,
+          118
+        ]
+      ],
+      "classification_report": {
+        "Bedroom": {
+          "precision": 0.9914529914529915,
+          "recall": 1.0,
+          "f1-score": 0.9957081545064378,
+          "support": 116.0
+        },
+        "Corridor": {
+          "precision": 0.9834710743801653,
+          "recall": 0.9916666666666667,
+          "f1-score": 0.9875518672199171,
+          "support": 120.0
+        },
+        "Bathroom": {
+          "precision": 0.9915966386554622,
+          "recall": 0.9833333333333333,
+          "f1-score": 0.9874476987447699,
+          "support": 120.0
+        },
+        "LivingRoom": {
+          "precision": 0.9834710743801653,
+          "recall": 0.9916666666666667,
+          "f1-score": 0.9875518672199171,
+          "support": 120.0
+        },
+        "Kitchen": {
+          "precision": 1.0,
+          "recall": 0.9833333333333333,
+          "f1-score": 0.9915966386554622,
+          "support": 120.0
+        },
+        "accuracy": 0.9899328859060402,
+        "macro avg": {
+          "precision": 0.9899983557737568,
+          "recall": 0.99,
+          "f1-score": 0.9899712452693009,
+          "support": 596.0
+        },
+        "weighted avg": {
+          "precision": 0.9899885931181915,
+          "recall": 0.9899328859060402,
+          "f1-score": 0.9899327425227428,
+          "support": 596.0
+        }
+      }
+    },
+    "kNN": {
+      "accuracy": 0.8825503355704698,
+      "macro_f1": 0.8818713802668563
+    },
+    "RandomForest": {
+      "accuracy": 0.9815436241610739,
+      "macro_f1": 0.9815770629828175
+    },
+    "MLP": {
+      "accuracy": 0.9815436241610739,
+      "macro_f1": 0.9814858974519034
+    }
+  },
+  "chosen": "RoomNetMT",
+  "selected_on": "validation"
+}

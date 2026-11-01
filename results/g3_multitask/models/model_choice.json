@@ -1,0 +1,6 @@
+{
+  "chosen": "RoomNetMT",
+  "feature": "window_tensor",
+  "val_macro_f1": 0.9899712452693009,
+  "val_accuracy": 0.9899328859060402
+}

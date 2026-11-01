@@ -19,10 +19,16 @@ sys.path.insert(0, str(ROOT / "src"))
 from smarthome.config import load_config
 from smarthome.preprocessing import RSSIPreprocessor
 from smarthome.dataset import RoomWindowDataset
-from smarthome.models import RoomNetLite
+from smarthome.models import RoomNetLite, RoomNetMT, SimpleCNN
 from smarthome.topology import TopologyFilter
 from smarthome.metrics import room_metrics
 from smarthome.utils import save_json
+
+TORCH_MODELS = {
+    "RoomNetLite": ("roomnet_lite.pt", RoomNetLite),
+    "SimpleCNN": ("simple_cnn.pt", SimpleCNN),
+    "RoomNetMT": ("roomnet_mt.pt", RoomNetMT),
+}
 
 
 def _wrap(stream, encoding="utf-8"):
@@ -43,6 +49,8 @@ def main():
     p.add_argument("--config", default=str(ROOT / "config.yaml"))
     p.add_argument("--processed-dir", default=str(ROOT / "data/processed"))
     p.add_argument("--models-dir", default=str(ROOT / "models"))
+    p.add_argument("--model", default="RoomNetLite", choices=sorted(TORCH_MODELS))
+    p.add_argument("--output", default=None, help="Ghi đè tên file kết quả (mặc định room_test_metrics.json)")
     args = p.parse_args()
 
     cfg = load_config(args.config)
@@ -53,7 +61,8 @@ def main():
     ds = RoomWindowDataset(df, pp, rooms, int(cfg["data"]["window_size"]))
     loader = DataLoader(ds, batch_size=128, shuffle=False)
     mcfg = cfg["room_model"]
-    model = RoomNetLite(
+    artifact, model_cls = TORCH_MODELS[args.model]
+    model = model_cls(
         pp.feature_dim,
         len(rooms),
         int(mcfg["hidden_channels"]),
@@ -61,7 +70,7 @@ def main():
         float(mcfg["dropout"]),
     ).to(device)
     model.load_state_dict(
-        torch.load(Path(args.models_dir) / "roomnet_lite.pt", map_location=device)
+        torch.load(Path(args.models_dir) / artifact, map_location=device)
     )
     model.eval()
 

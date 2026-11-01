@@ -49,11 +49,21 @@ def _load_room_model(artifact_dir, config, rooms, feature_dim, device):
             dropout=float(room_cfg["dropout"]),
         ).to(device)
         model_path = Path(artifact_dir) / artifact
-        model.load_state_dict(torch.load(model_path, map_location=device))
+        # weights_only=True: chỉ cho phép tensor và kiểu nguyên thuỷ, chặn việc
+        # thực thi mã qua pickle nếu file .pt bị thay bằng file độc. Các artifact
+        # của dự án đều là state_dict() nên nạp được (đã kiểm chứng cả 4 file).
+        # joblib ở dưới thì không có chế độ an toàn tương đương — xem ghi chú.
+        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
         model.eval()
         return chosen, model
 
     # Sklearn candidate: artifact do train_ensemble.py lưu.
+    #
+    # LƯU Ý BẢO MẬT: joblib dùng pickle nên KHÔNG có chế độ nạp an toàn tương
+    # đương weights_only=True — nạp một file .joblib bị thay bằng file độc là
+    # thực thi mã. Ở đây chấp nhận được vì artifact do chính pipeline huấn luyện
+    # của dự án sinh ra trong models/; đừng bao giờ trỏ artifact_dir vào thư mục
+    # tải từ ngoài vào.
     import joblib
 
     model_path = Path(artifact_dir) / f"model_{chosen}.joblib"
@@ -93,7 +103,9 @@ class SmartHomeInferenceEngine:
                     embedding_dim=int(mt_cfg["embedding_dim"]),
                     dropout=float(mt_cfg["dropout"]),
                 ).to(self.device)
-                self.activity_model.load_state_dict(torch.load(mt_path, map_location=self.device))
+                self.activity_model.load_state_dict(
+                    torch.load(mt_path, map_location=self.device, weights_only=True)
+                )
                 self.activity_model.eval()
 
         self.window_size = int(config["data"]["window_size"])
@@ -115,7 +127,7 @@ class SmartHomeInferenceEngine:
                 latent_size=int(anomaly_cfg["latent_size"]),
                 num_layers=int(anomaly_cfg["num_layers"]),
             )
-            model.load_state_dict(torch.load(anomaly_path, map_location=self.device))
+            model.load_state_dict(torch.load(anomaly_path, map_location=self.device, weights_only=True))
             self.anomaly_detector = OnlineAnomalyDetector(
                 model=model,
                 feature_builder=builder,

@@ -1,0 +1,67 @@
+# Dockerfile tạo zip nộp giảng viên / chia sẻ nhóm
+# Build: docker build -f Dockerfile.zip -t an-tam-home-zip .
+# Chạy: docker run --rm -v ${PWD}/output:/out an-tam-home-zip
+
+FROM alpine:3.20 AS builder
+
+# Cài zip
+RUN apk add --no-cache zip
+
+WORKDIR /src
+
+# Copy toàn bộ source (trừ cache/build)
+COPY . .
+
+# Xóa thư mục rác trước khi nén
+RUN rm -rf \
+    android_collector/.gradle \
+    android_collector/app/build \
+    android_collector/build \
+    android_collector/local.properties \
+    android_collector/.idea \
+    android_collector/.kotlin \
+    server/__pycache__ \
+    server/routes/__pycache__ \
+    src/smarthome/__pycache__ \
+    src/smarthome/models/__pycache__ \
+    tests/__pycache__ \
+    scripts/__pycache__ \
+    .pytest_cache \
+    .venv \
+    .vscode \
+    .github \
+    .tmp \
+    .trace-mcp \
+    .playwright-cli \
+    backup_original \
+    runlogs \
+    notebooks \
+    *.log \
+    train_*.bat
+
+# Tạo zip
+RUN zip -r -9 /out/BAO_CAO_DO_AN_336_an-tam-home_v2310_full.zip . \
+    -x "*.git*" \
+    -x "*/__pycache__/*" \
+    -x "*.pyc" \
+    -x "*/.gradle/*" \
+    -x "*/build/*" \
+    -x "*/.idea/*" \
+    -x "*/.kotlin/*" \
+    -x "*/.venv/*" \
+    -x "*/.vscode/*" \
+    -x "*/.github/*" \
+    -x "*/.tmp/*" \
+    -x "*/.trace-mcp/*" \
+    -x "*/.playwright-cli/*" \
+    -x "*/backup_original/*" \
+    -x "*/runlogs/*" \
+    -x "*/notebooks/*" \
+    -x "*.log" \
+    -x "train_*.bat" \
+    -x ".env" \
+    -x "data/*"
+
+# Stage 2: image nhỏ chỉ chứa zip
+FROM scratch
+COPY --from=builder /out/BAO_CAO_DO_AN_336_an-tam-home_v2310_full.zip /BAO_CAO_DO_AN_336_an-tam-home_v2310_full.zip

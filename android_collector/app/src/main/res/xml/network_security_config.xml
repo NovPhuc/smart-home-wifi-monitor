@@ -10,6 +10,10 @@
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
+        <!-- CHO PHÉP HTTP CHỈ CHO LAN NSD AUTO-DISCOVERY.
+             Máy chủ gia đình không có chứng chỉ công khai cho IP LAN.
+             Dữ liệu gửi là RSSI với BSSID đã băm SHA-256 (không PII).
+             KHI DÙNG TUNNEL/HTTPS: domain config dưới sẽ enforce pinning. -->
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

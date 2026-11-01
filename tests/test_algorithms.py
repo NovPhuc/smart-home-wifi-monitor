@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from copy import deepcopy
 from pathlib import Path
 import sqlite3
 
@@ -320,7 +322,7 @@ def test_engine_reports_activity_model_from_roomnet_mt(tmp_path):
     engine = SmartHomeInferenceEngine(config, tmp_path)
 
     assert engine.model_choice == "RoomNetMT"
-    assert engine.activity_model is model, "RoomNetMT là room model thì head hoạt động dùng chính nó"
+    assert engine.activity_model is engine.room_model, "RoomNetMT là room model thì head hoạt động dùng chính nó"
     wifi = {"AP1": -45.0, "AP2": -62.0, "AP3": -80.0}
     for step in range(int(config["data"]["window_size"])):
         result = engine.process_scan(wifi, timestamp=1_700_000_000 + step * 3)

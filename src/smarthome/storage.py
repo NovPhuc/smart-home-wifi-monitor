@@ -181,7 +181,8 @@ class SmartHomeDatabase:
             if version < SCHEMA_VERSION:
                 self._migrate_rooms_name_key(connection)
                 self._migrate_scan_reliability(connection)
-                connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+                # PRAGMA không hỗ trợ parameterized query; SCHEMA_VERSION là const int
+                connection.execute(f"PRAGMA user_version = {int(SCHEMA_VERSION)}")
 
     @staticmethod
     def _migrate_scan_reliability(connection: sqlite3.Connection) -> None:

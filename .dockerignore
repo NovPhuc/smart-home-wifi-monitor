@@ -1,66 +1,44 @@
-# .dockerignore — loại trừ file không cần cho Docker build
-
-# Python cache
-__pycache__
+# Bytecode & cache
+__pycache__/
 *.pyc
 *.pyo
-*.pyd
-.pytest_cache
-.ruff_cache
-.mypy_cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Virtual env
-.venv
+.venv/
 venv/
 env/
 
-# IDE
+# IDE & OS
 .vscode/
 .idea/
 *.swp
-*.swo
+.DS_Store
 
-# Git
-.git/
-.gitignore
+# Logs & artifacts
+*.log
+train_*.log
+runlogs/
+notebooks/
+backup_original/
+
+# Model & data (nếu không mount volume)
+models/
+data/*.db
+data/*.sqlite
 
 # Android build
 android_collector/.gradle/
-android_collector/app/build/
 android_collector/build/
+android_collector/app/build/
 android_collector/local.properties
-android_collector/*.iml
-android_collector/.idea/
-android_collector/.kotlin/
 
-# Logs & temp
-*.log
-train_*.bat
-.train/
+# CI/CD & misc
+.github/
 .tmp/
 .trace-mcp/
 .playwright-cli/
-backup_original/
-runlogs/
-notebooks/
-
-# Data & models (sẽ mount volume riêng)
-data/
-models/
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Docker
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-
-# CI/CD
-.github/
-
-# OS
-.DS_Store
-Thumbs.db
+*.bat
+Dockerfile.zip
