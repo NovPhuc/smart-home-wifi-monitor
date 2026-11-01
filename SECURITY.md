@@ -68,8 +68,19 @@ stack trace cho client.
 - Server: `python server/app.py` với `SMART_HOME_SSL_CERT`/`SMART_HOME_SSL_KEY`
   sẽ chạy HTTPS thật (SSL context, cookie Secure tự bật).
 - Android (`android_collector`): `network_security_config.xml` + lớp
-  `CertificatePinner` ghim SPKI SHA-256 cho mọi kết nối **https://** (tunnel,
-  domain). Pin đọc từ `res/raw/cert_pins.txt`, sinh bằng:
+  `CertificatePinner`. **Xác thực chuỗi chứng chỉ luôn do trust store hệ thống
+  làm**; ghim SPKI SHA-256 là lớp **tăng cường thêm**, chỉ áp dụng khi
+  `res/raw/cert_pins.txt` có ít nhất một pin thật. Chưa điền pin thì app dùng
+  đúng hành vi mặc định của Android (không ghim thêm gì).
+
+  > Bản trước đây tự viết một `X509TrustManager` chỉ kiểm tra hạn dùng chứng chỉ,
+  > kèm `HostnameVerifier` trả về `true` khi chưa có pin — nên ở đúng trạng thái
+  > mặc định (file pin chỉ có dòng chú thích) app chấp nhận **mọi** chứng chỉ và
+  > **mọi** tên miền. Đã vá: uỷ thác xác thực chuỗi cho `TrustManagerFactory` mặc
+  > định trước rồi mới áp pin; `pinnedSslContext()` trả `null` khi chưa cấu hình
+  > pin để giữ nguyên mặc định của hệ thống. Chi tiết: `docs/11_kiem_tra_bao_mat.md` §8.
+
+  Pin đọc từ `res/raw/cert_pins.txt`, sinh bằng:
 
   ```powershell
   openssl x509 -in cert.pem -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | base64
@@ -116,7 +127,7 @@ stack trace cho client.
 - [ ] Sinh pin từ chứng chỉ, điền vào `cert_pins.txt` và
       `network_security_config.xml`, thay domain placeholder.
 - [ ] Cấu hình `alerts.webhook_url` nếu muốn cảnh báo đẩy ra ngoài.
-- [ ] Chạy `python scripts/security_audit.py` để kiểm tra lại toàn bộ.
+- [ ] Chạy bộ kiểm tra ở §5 (ba script, mỗi cái một việc).
 - [ ] Không commit `.env`, `data/secret_key`, chứng chỉ khóa riêng.
 
 ## 4. Phản ứng sự cố
@@ -126,3 +137,56 @@ stack trace cho client.
 2. Rà log `[Bao mat]` — rate limit và mẫu tấn công bị chặn đều có cảnh báo.
 3. Luân chuyển chứng chỉ: sinh pin mới, thêm vào `cert_pins.txt` (giữ pin cũ
    đến khi toàn bộ thiết bị cập nhật).
+
+## 5. Bộ kiểm tra bảo mật
+
+Ba script, mỗi cái một việc — đừng gộp chúng làm một vì mục đích khác nhau:
+
+| Script | Việc | Kết quả |
+|--------|------|---------|
+| `scripts/security_audit.py` | Kiểm tra **cấu hình đang chạy**: các lớp bảo mật có mặt, `data/secret_key`, `.env`, HTTPS, webhook | In `[OK]/[CANH BAO]/[THIEU]` ra màn hình |
+| `scripts/full_security_audit.py` | Quét **mã nguồn tĩnh**: SQL injection, hardcoded secret, crypto yếu, rò log, dependency, DB, git history | Ghi `SECURITY_AUDIT_REPORT.md` |
+| `scripts/security_sweep.py` | Quét **phân quyền**: gọi mọi route `/api/*` không kèm phiên, và một lần với bearer token sai | In danh sách endpoint hở (kỳ vọng: không có) |
+
+```powershell
+python scripts/security_audit.py          # cấu hình
+python scripts/full_security_audit.py     # quét mã -> SECURITY_AUDIT_REPORT.md
+python scripts/security_sweep.py          # quét phân quyền (cần PYTHONPATH=src)
+```
+
+### Đọc báo cáo
+
+`SECURITY_AUDIT_REPORT.md` **sinh tự động**, đừng sửa tay. Chạy lại script rồi đọc lại —
+nếu số liệu trong báo cáo khác với kết quả chạy mới nhất thì báo cáo đã cũ.
+
+Hai lỗi false positive đã từng làm báo cáo sai nghiêm trọng (69 findings trong khi chỉ có
+4 là thật), nay đã sửa trong scanner — ghi lại để không tái phạm khi thêm pattern mới:
+
+1. `RC4|DES|ECB` khớp cả chuỗi **`DESC`** trong `ORDER BY ... DESC` và **`DES`** trong
+   `description`/`oldest`. Phải dùng `\b(?:RC4|DES|ECB)\b` và phân biệt hoa thường.
+2. `Log\.(d|i|w|e)\(.*password|token|secret` — thiếu nhóm nên phép `|` tách cả biểu thức,
+   khiến **mọi dòng chứa chữ "token"** đều bị báo là ghi log bí mật (kể cả khai báo
+   `private lateinit var collectorToken`). Phải là
+   `Log\.(?:d|i|w|e)\([^)]*(?:password|token|secret)`.
+
+### Ký hiệu miễn trừ
+
+Dòng đã được soát tay và xác nhận an toàn thì thêm `# nosec` (hoặc `// nosec` cho Kotlin)
+kèm lý do. Scanner bỏ qua những dòng này, và bỏ qua cả dòng bắt đầu bằng `#`.
+Ví dụ: `f"SELECT COUNT(*) FROM {table} WHERE {key}=?"  # nosec — bảng cố định trong test`.
+Đừng lạm dụng: mỗi `# nosec` là một chỗ ai đó phải tin, nên luôn ghi rõ vì sao.
+
+### Kết quả lần chạy gần nhất
+
+`full_security_audit.py` → **4 findings, tất cả INFO** (0 CRITICAL/HIGH/MEDIUM/LOW).
+Cả 4 đều là thiết kế đã được chấp nhận và ghi trong tài liệu này:
+
+| Finding | Xử lý |
+|---------|-------|
+| mDNS enabled | Cần cho tính năng tự tìm máy chủ; tắt bằng `mdns_enabled: false` nếu không dùng |
+| Pin expiration `2027-11-01` | Nhắc luân chuyển chứng chỉ trước hạn — xem §4 |
+| Cleartext HTTP tới LAN (`http://$host:$port`) | Thỏa thuận thiết kế ở §1.6 |
+| `cleartextTrafficPermitted="true"` | Cùng lý do trên; HTTPS bắt buộc khi ra ngoài LAN |
+
+`security_sweep.py` → **39 tổ hợp / 34 route `/api/*`, 0 endpoint hở phân quyền**
+(chỉ 4 endpoint công khai có chủ đích: `login`, `logout`, `register`, `health`).

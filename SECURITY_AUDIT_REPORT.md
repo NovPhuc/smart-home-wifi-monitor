@@ -1,6 +1,6 @@
 # Security Audit & Code Review Report
 **Project:** An Tâm Home (v2310)
-**Date:** 2026-11-01 20:27:54
+**Date:** 2026-11-01 21:29:09
 **Root:** `E:\Downloads\smart-home-wifi-monitor2310\smart-home-wifi-monitor`
 
 ## Summary
@@ -9,10 +9,10 @@
 |----------|-------|
 | CRITICAL | 0 |
 | HIGH | 0 |
-| MEDIUM | 0 |
+| MEDIUM | 1 |
 | LOW | 0 |
 | INFO | 4 |
-| **Total** | **4** |
+| **Total** | **5** |
 
 
 ## CONFIG (1 findings)
@@ -23,7 +23,18 @@
 - **Description:** Service discovery broadcast on LAN
 - **Recommendation:** Ensure LAN is trusted; disable if not needed
 
-## CRYPTO (1 findings)
+## CRYPTO (2 findings)
+
+### 🟡 [MEDIUM] Weak Cryptography: Weak cipher mode
+- **Category:** CRYPTO
+- **File:** `make_report.py`:111
+- **CWE:** [CWE-327](https://cwe.mitre.org/data/definitions/327.html)
+- **Description:** Use of deprecated/weak cryptographic primitive.
+- **Code:**
+```
+bullet("Sửa công cụ quét bảo mật (tuần 11)", "scripts/full_security_audit.py báo 69 lỗi (10 HIGH) nhưng khi kiểm chứng từng lỗi, khoảng 90% là báo oan: pattern DES khớp cả chữ DESC trong ORDER BY; quét chính regex của nó; dò dependency chỉ theo tên package nên báo oan cả requests>=2.31; pattern Log Android khớp mọi dòng chứa chữ token. Đã sửa 7 lỗi độ chính xác (word boundary, marker nosec, dò version thật, allowlist cột DB đã soát). Sau sửa còn 4 findings, tất cả INFO, đều là thiết kế có chủ đích ghi trong SECURITY.md (mDNS, HTTP trong LAN, hạn dùng certificate pin).")
+```
+- **Recommendation:** Use SHA-256+, AES-GCM, bcrypt/scrypt/argon2 for passwords.
 
 ### ⚪ [INFO] Pin expiration date found
 - **Category:** CRYPTO

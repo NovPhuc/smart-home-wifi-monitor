@@ -26,6 +26,13 @@ a_base  = load("after_optimized/baseline_metrics.json")
 a_thr   = load("after_optimized/anomaly_threshold.json")
 kf_r    = load("after_optimized/kfold_metrics_roomnet.json")
 kf_s    = load("after_optimized/kfold_metrics_simple.json")
+g3_mt   = load("g3_multitask/models/room_test_metrics_RoomNetMT.json")
+g3_lite = load("g3_multitask/models/room_test_metrics.json")
+g3_cnn  = load("g3_multitask/models/room_test_metrics_SimpleCNN.json")
+g3_ens  = load("g3_multitask/models/ensemble_val_metrics.json")
+g3_choice = load("g3_multitask/models/model_choice.json")
+g3_mtval  = load("g3_multitask/models/roomnet_mt_val_metrics.json")
+g3_base = load("g3_multitask/models/baseline_metrics.json")
 
 pct = lambda v: f"{v*100:.2f}%"
 DASH = "—"
@@ -85,7 +92,7 @@ p = para("Mã đề tài: 336 (CNTT-KLCN-336) — Định hướng nghiên cứu
 para("Xây dựng hệ thống định vị trong nhà theo phòng dựa trên WiFi Fingerprinting phục vụ giám sát "
      "sức khỏe và phát hiện bất thường di chuyển cho người cao tuổi trong Nhà thông minh",
      size=13, align=WD_ALIGN_PARAGRAPH.CENTER)
-para("Kế hoạch 12 tuần: 17/8/2026 – 08/11/2026 · Báo cáo thực hiện tại tuần 8 · Mọi số liệu lấy từ "
+para("Kế hoạch 12 tuần: 17/8/2026 – 08/11/2026 · Báo cáo thực hiện tại tuần 11 · Mọi số liệu lấy từ "
      "kết quả chạy thật trong thư mục results/ (seed 42, tái lập được).", size=12, align=WD_ALIGN_PARAGRAPH.CENTER)
 
 # ============================== (a) VIỆC ĐÃ LÀM ==============================
@@ -97,6 +104,11 @@ bullet("Sửa lỗi dữ liệu và thuật toán (phiên 1-2)", "Cân bằng d�
 bullet("Sửa lỗi còn lại (phiên này)", "Fix A — loại bỏ rò rỉ đánh giá anomaly: tách 3 phần không giao nhau D01–D10 (train) / D11–D12 (chọn ngưỡng) / D13–D14 (test, ghi vào anomaly_threshold.json, evaluate_anomaly.py chỉ đánh giá test_days). Fix B — bổ sung khóa early_stopping và topology.self_weight vào config.yaml. Fix C — lập results/ có cấu trúc (before_original/, after_optimized/, runlogs, run_info, README).")
 bullet("Đo lại sau khi sửa (sau)", "Chạy lại toàn bộ pipeline + K-fold 5-fold × 2 model (seed 42): results/after_optimized/ (9 JSON + runlogs + run_info.txt).")
 bullet("Kiểm chứng", "43/43 unit test pass sau mọi sửa đổi; SQLite PRAGMA integrity_check = ok, foreign_key_check = 0 vi phạm (10 bảng).")
+bullet("Tái cấu trúc server và thêm bảo mật (tuần 9–11)", "Tách server/app.py 952 dòng thành app_state, app_security, app_services và 5 blueprint routes; middleware giới hạn tần suất theo nhóm endpoint (auth 30/phút, collect/scan/sensor 240/phút), bắt buộc JSON cho thao tác ghi, trả lỗi JSON có mã chuẩn. Đổi khóa ký session từ chuỗi cố định sang khóa ngẫu nhiên lưu data/secret_key; chặn dò mật khẩu và dò mã chia sẻ (5 lần sai/15 phút); thêm CSP, nosniff, X-Frame-Options, HSTS khi chạy HTTPS. 84/84 test pass, gồm test hồi quy cho từng lớp bảo mật.")
+bullet("Realtime bằng Server-Sent Events (tuần 9–11)", "Thay polling 3 request/2 giây bằng /api/stream: server đẩy status/history/alerts theo gói, chỉ gửi khi payload đổi, heartbeat 15 giây, giới hạn 32 kết nối. app.js tách thành 10 module ES (server/static/js/). Đo thật: 6 giây nhận status, history, alerts, status; REST vẫn chạy song song.")
+bullet("Model multi-task RoomNetMT (tuần 10–11)", "Thêm head hoạt động 4 lớp (STILL, LIGHT_ACTIVITY, MOVING, ROOM_CHANGE) dùng chung encoder với head phòng, theo cách làm của ARIL (IEEE Access 2019). Nhãn hoạt động chưng cất từ bộ luật ActivityMonitor trong phạm vi cửa sổ (median delta, cùng ngưỡng 1.5/4.0 dB). act_agreement đạt 97.32% trên validation (file roomnet_mt_val_metrics.json).")
+bullet("Ensemble meta-learning (tuần 10–11)", "train_ensemble.py đánh giá 6 ứng viên (RoomNetLite, SimpleCNN, RoomNetMT, kNN, RandomForest, MLP) trên validation và chọn người thắng ghi vào model_choice.json; inference đọc file này để nạp model tương ứng. Chỉ chọn trên validation, không dùng tập test.")
+bullet("Sửa công cụ quét bảo mật (tuần 11)", "scripts/full_security_audit.py báo 69 lỗi (10 HIGH) nhưng khi kiểm chứng từng lỗi, khoảng 90% là báo oan: pattern DES khớp cả chữ DESC trong ORDER BY; quét chính regex của nó; dò dependency chỉ theo tên package nên báo oan cả requests>=2.31; pattern Log Android khớp mọi dòng chứa chữ token. Đã sửa 7 lỗi độ chính xác (word boundary, marker nosec, dò version thật, allowlist cột DB đã soát). Sau sửa còn 4 findings, tất cả INFO, đều là thiết kế có chủ đích ghi trong SECURITY.md (mDNS, HTTP trong LAN, hạn dùng certificate pin).")
 
 # ============================== (b) LỖI + CÁCH SỬA ==============================
 heading("2. Lỗi đã phát hiện và cách sửa", 1)
@@ -144,6 +156,21 @@ rows = [
     ["Độ trễ end-to-end (ms/mẫu)", DASH, f"{a_room['mean_e2e_latency_ms_per_sample']:.4f}", "Gồm softmax + TopologyFilter — mới đo"],
 ]
 table(["Chỉ số (kết quả chạy thật)", "Trước (gốc)", "Sau (tối ưu)", "Ghi chú"], rows)
+
+heading("3.1. Bổ sung G3: multi-task + ensemble (cùng dữ liệu v2, cùng split, seed 42)", 2)
+para("Kết quả lấy từ results/g3_multitask/models/ (README trong thư mục này ghi lại toàn bộ lệnh tái lập). Ensemble chọn trên validation; tập test chỉ dùng để báo cáo cuối.", size=12)
+g3_rows = [
+    ["Chọn trên validation — RoomNetMT", f"{pct(g3_ens['candidates']['RoomNetMT']['macro_f1'])}", "Thắng 5 ứng viên còn lại (RoomNetLite 98.83%, SimpleCNN 98.66%, RF 98.16%, MLP 98.15%, kNN 88.19%)"],
+    ["RoomNetMT — test Accuracy", pct(g3_mt["accuracy"]), "Cao hơn RoomNetLite cùng đợt chạy (98.99%)"],
+    ["RoomNetMT — test Macro F1", pct(g3_mt["macro_f1"]), "Cao hơn RoomNetLite 0.18 điểm phần trăm"],
+    ["RoomNetMT — độ trễ (ms/mẫu)", f"{g3_mt['mean_inference_ms_per_sample']:.4f}", "Vẫn dưới 0.1 ms, đạt yêu cầu thời gian thực"],
+    ["Head hoạt động — act_agreement (val)", pct(g3_mtval["activity_agreement"]), "Mức đồng thuận với nhãn suy từ bộ luật; ngẫu nhiên 25%"],
+    ["RoomNetLite (chạy lại cùng đợt) — test F1", pct(g3_lite["macro_f1"]), "Khớp after_optimized (98.99%) — xác nhận seed tái lập được"],
+    ["SimpleCNN (chạy lại cùng đợt) — test F1", pct(g3_cnn["macro_f1"]), "Khớp after_optimized (97.65%)"],
+    ["RandomForest — test F1", pct(g3_base["RandomForest"]["macro_f1"]), "RF cao hơn RoomNetLite trên test nhưng thua trên validation — lý do chọn theo validation, không chọn theo test"],
+]
+table(["Chỉ số", "Giá trị", "Ghi chú"], g3_rows)
+para("Cách đọc bảng: RoomNetMT không làm giảm độ chính xác phân loại phòng so với RoomNetLite (99.16% so với 98.99% trên cùng tập test) mà thêm được head hoạt động đạt 97.32% đồng thuận. RandomForest đạt test F1 99.16% ngang RoomNetMT nhưng validation chỉ 98.16% — nếu chọn theo test sẽ là rò rỉ đánh giá, đúng lỗi đã sửa ở Fix A.", size=12)
 para("Ghi chú quan trọng: (1) Accuracy 100% của bản gốc là hệ quả dữ liệu v1 quá dễ — chính là lỗi #2, không phải kết quả tốt; sau khi thực tế hóa dữ liệu, 98.99% là con số đáng tin. (2) Chỉ số anomaly trước/sau không so sánh tuyệt đối vì protocol đánh giá đã được sửa lỗi rò rỉ (#3); số sau đo trên tập test hoàn toàn tách khỏi huấn luyện/chọn ngưỡng. (3) Test anomaly (D13–D14) chỉ chứa 2/4 loại bất thường do dữ liệu mô phỏng chỉ có anomaly ở 4 ngày cuối — giới hạn được ghi nhận ở mục 5.", size=12)
 
 # ============================== (d) ĐỐI CHIẾU ĐỀ CƯƠNG ==============================
@@ -151,10 +178,10 @@ heading("4. Đối chiếu yêu cầu đề cương (Đạt / Đạt một phầ
 reqs = [
     ["Phân loại phòng từ vector RSSI bằng lightweight CNN/1D-CNN",
      "ĐẠT",
-     f"RoomNetLite 1D-CNN depthwise separable (~50k tham số, models/roomnet_lite.pt 50KB). Test Accuracy {pct(a_room['accuracy'])}, Macro F1 {pct(a_room['macro_f1'])} (results/after_optimized/room_test_metrics.json); K-fold 5 {pct(kf_r['mean_macro_f1'])} ± {pct(kf_r['std_macro_f1'])} (kfold_metrics_roomnet.json)."],
+     f"RoomNetLite 1D-CNN depthwise separable (~50k tham số, models/roomnet_lite.pt 50KB). Test Accuracy {pct(a_room['accuracy'])}, Macro F1 {pct(a_room['macro_f1'])} (results/after_optimized/room_test_metrics.json); K-fold 5 {pct(kf_r['mean_macro_f1'])} ± {pct(kf_r['std_macro_f1'])} (kfold_metrics_roomnet.json). G3: RoomNetMT đạt {pct(g3_mt['accuracy'])}/{pct(g3_mt['macro_f1'])} và được ensemble chọn (results/g3_multitask/models/model_choice.json)."],
     ["Mô-đun phát hiện bất thường bằng autoencoder tái tạo quỹ đạo (reconstruction error)",
      "ĐẠT",
-     f"GRU-AE (src/smarthome/models/gru_autoencoder.py). Trên tập test tách riêng: AE-only F1 {pct(a_anom['ae_only']['f1'])}; hybrid AE+Rules F1 {pct(a_anom['hybrid_ae_plus_rules']['f1'])} (results/after_optimized/anomaly_test_metrics.json)."],
+     f"GRU-AE (src/smarthome/models/gru_autoencoder.py). Trên tập test tách riêng: AE-only F1 {pct(a_anom['ae_only']['f1'])}; hybrid AE+Rules F1 {pct(a_anom['hybrid_ae_plus_rules']['f1'])} (results/after_optimized/anomaly_test_metrics.json). Bổ sung G3: head hoạt động của RoomNetMT đồng thuận {pct(g3_mtval['activity_agreement'])} với bộ luật, xuất thêm trường activity_model trong /api/status."],
     ["Phát hiện đứng yên quá lâu, di chuyển bất thường, nghi ngờ té ngã",
      "ĐẠT MỘT PHẦN",
      "RuleEngine: dwell quá giới hạn, chuyển phòng bất khả thi, hoạt động đêm (src/smarthome/anomaly.py) + MobileSensorFusion: impact + immobility theo dõi té ngã (inference.py:process_mobile_sensor). Cần kiểm thử với accelerometer thật."],
@@ -172,7 +199,7 @@ reqs = [
      f"Accuracy {pct(a_room['accuracy'])}; Hybrid Precision {pct(a_anom['hybrid_ae_plus_rules']['precision'])} / Recall {pct(a_anom['hybrid_ae_plus_rules']['recall'])}; độ trễ model {a_room['mean_inference_ms_per_sample']:.3f} ms, end-to-end {a_room['mean_e2e_latency_ms_per_sample']:.3f} ms mỗi mẫu."],
     ["Demo dashboard Flask: vị trí theo phòng + cảnh báo bất thường",
      "ĐẠT",
-     "server/app.py: GET / (dashboard), POST /api/scan, GET /api/status, /api/history, /api/alerts, /api/metrics; cảnh báo WARNING/CRITICAL lưu SQLite."],
+     "server/app.py: GET / (dashboard), POST /api/scan, GET /api/status, /api/history, /api/alerts, /api/metrics; cảnh báo WARNING/CRITICAL lưu SQLite. Tuần 9–11: thêm /api/stream (SSE), module hóa server và frontend, bảo mật theo SECURITY.md (rate limit, JSON-only, CSP, khóa session ngẫu nhiên, chặn dò)."],
     ["Cấu trúc lưu trữ kết quả thuật toán có tổ chức",
      "ĐẠT",
      "SQLite 10 bảng (users, homes, rooms, collection_sessions, wifi_scans, predictions, sensor_samples, alerts, collector_devices…) — integrity_check ok, 0 vi phạm FK; results/ chuẩn hóa before_original + after_optimized (JSON + runlogs + run_info)."],
@@ -188,30 +215,30 @@ for i, row in enumerate(t.rows):
 # ============================== (e) TỒN TẠI + ĐỀ XUẤT ==============================
 heading("5. Tồn tại và đề xuất bước tiếp theo", 1)
 todo = [
-    ["Chưa có dữ liệu thực tế tại lab/phòng", "CAO", "Thu thập RSSI thực tế ≥ 2 phòng (router sẵn có + android_collector), chạy train_home.py theo từng nhà; đánh giá lại toàn bộ chỉ số trên dữ liệu thật.", "Tuần 9–10"],
-    ["Android collector chưa chạy end-to-end trên thiết bị thật", "TB", "Build APK, thu thập qua /api/collect, đo latency mạng + pin, đối chiếu format JSON.", "Tuần 9–10"],
-    ["Té ngã: MobileSensorFusion chưa có dữ liệu accelerometer thật", "TB", "Ghi gia tốc thực tế (ngã mô phỏng trên đệm), hiệu chỉnh impact_threshold=18g, kiểm thử cảnh báo CRITICAL.", "Tuần 9–10"],
-    ["Test anomaly chỉ chứa 2/4 loại (night_activity, unusual_transition); 2 loại dwell dùng để chọn ngưỡng", "TB", "Khi sinh dữ liệu thực/simulate tiếp theo: phân bố anomaly đều các ngày để mọi loại đều xuất hiện trong tập test tách riêng.", "Tuần 9–10"],
-    ["K-fold 5-fold chỉ trên 7 session mô phỏng", "T", "Với dữ liệu thực nhiều session: tăng 10-fold hoặc leave-one-session-out.", "Tuần 11–12"],
-    ["Model chưa nén cho edge deployment", "T", "Quantization INT8 / pruning RoomNetLite nếu triển khai Raspberry Pi/ESP32; hiện 0.031 ms/mẫu trên CPU đã đủ real-time.", "Tuần 11–12"],
+    ["Chưa có dữ liệu thực tế tại lab/phòng (hạn tuần 9–10 đã qua)", "CAO", "Thu thập RSSI thực tế ≥ 2 phòng (router sẵn có + android_collector), chạy train_home.py theo từng nhà; đánh giá lại toàn bộ chỉ số trên dữ liệu thật. Mọi số liệu hiện tại chỉ có giá trị trên dữ liệu mô phỏng v2.", "Ngay tuần 11–12"],
+    ["Android collector chưa chạy end-to-end trên thiết bị thật", "TB", "Build APK, thu thập qua /api/collect, đo latency mạng + pin, đối chiếu format JSON. Đã có certificate pinning cho HTTPS và NSD tìm server trong LAN (docs/12).", "Tuần 11–12"],
+    ["Té ngã: MobileSensorFusion chưa có dữ liệu accelerometer thật", "TB", "Ghi gia tốc thực tế (ngã mô phỏng trên đệm), hiệu chỉnh impact_threshold=18g, kiểm thử cảnh báo CRITICAL.", "Tuần 11–12"],
+    ["Test anomaly chỉ chứa 2/4 loại (night_activity, unusual_transition); 2 loại dwell dùng để chọn ngưỡng", "TB", "Khi sinh dữ liệu thực/simulate tiếp theo: phân bố anomaly đều các ngày để mọi loại đều xuất hiện trong tập test tách riêng.", "Tuần 11–12"],
+    ["K-fold chưa chạy cho RoomNetMT; K-fold 5-fold hiện chỉ trên 7 session mô phỏng", "T", "Thêm RoomNetMT vào evaluate_kfold.py; với dữ liệu thực nhiều session: tăng 10-fold hoặc leave-one-session-out.", "Tuần 11–12"],
+    ["Công cụ quét bảo mật còn bỏ sót pattern (nosec mới chặn báo oan, chưa chặn sót)", "T", "Bổ sung pattern cho storage.py (SQL xây động), server/routes; chạy audit định kỳ trong CI.", "Tuần 11–12"],
 ]
 table(["Vấn đề tồn tại", "Mức độ", "Đề xuất giải pháp", "Thời gian dự kiến"], todo)
 
-heading("6. Tiến độ theo kế hoạch 12 tuần (17/8 – 8/11/2026) — báo cáo tại tuần 8", 1)
+heading("6. Tiến độ theo kế hoạch 12 tuần (17/8 – 8/11/2026) — báo cáo tại tuần 11", 1)
 weeks = [
     ["Tuần 1–2", "Tổng quan Smart Home, nhu cầu giám sát không xâm phạm riêng tư", "ĐẠT", "docs/01_tong_quan_va_nhu_cau.md"],
     ["Tuần 3–4", "Khảo sát Room-level Fingerprinting + nhận dạng bất thường chuỗi vị trí", "ĐẠT", "docs/02_khao_sat_phuong_phap.md"],
     ["Tuần 5–6", "Đề xuất cải tiến lightweight CNN + autoencoder tái tạo quỹ đạo", "ĐẠT", "docs/03_phuong_phap_de_xuat.md; src/smarthome/models/"],
     ["Tuần 7–8", "Cài đặt, tiền xử lý, huấn luyện, mô phỏng kịch bản bất thường", "ĐẠT", "Pipeline chạy đủ trên dữ liệu mô phỏng (results/); 43/43 test pass; dashboard Flask hoạt động"],
-    ["Tuần 9–10", "Thực nghiệm lab/phòng thực tế; đánh giá trước/sau; đo độ trễ", "ĐANG THỰC HIỆN", "Khung đánh giá trước/sau + độ trễ đã xong trên mô phỏng (results/); còn thu thập dữ liệu thực tế"],
-    ["Tuần 11–12", "Hoàn thiện demo, báo cáo, slide", "CHƯA LÀM", "Theo kế hoạch: demo thực tế + báo cáo cuối khóa + slide"],
+    ["Tuần 9–10", "Thực nghiệm lab/phòng thực tế; đánh giá trước/sau; đo độ trễ", "ĐẠT MỘT PHẦN", "Khung đánh giá + độ trễ + server bảo mật + SSE + RoomNetMT + ensemble đã xong (results/g3_multitask/); CHƯA thu dữ liệu RSSI thực tế"],
+    ["Tuần 11–12", "Hoàn thiện demo, báo cáo, slide", "ĐANG THỰC HIỆN", "Báo cáo này; còn: thu dữ liệu thực tế, demo trên thiết bị thật, slide"],
 ]
 t = table(["Tuần", "Công việc theo đề cương", "Trạng thái", "Bằng chứng"], weeks)
 for i, row in enumerate(t.rows):
     if i == 0: continue
     color_status(row.cells[2], weeks[i-1][2])
 
-para("Kết luận: 9/11 yêu cầu đề cương ĐẠT, 2/11 ĐẠT MỘT PHẦN, 1/11 CHƯA ĐẠT (dữ liệu thực tế — đúng phần việc của tuần 9–10, chưa đến hạn). Toàn bộ số liệu trong báo cáo được sinh trực tiếp từ results/before_original và results/after_optimized (chạy thật ngày 2026-10-11, seed 42, tái lập được theo hướng dẫn trong results/README.md).", size=12)
+para("Kết luận: 9/11 yêu cầu đề cương ĐẠT, 2/11 ĐẠT MỘT PHẦN, 1/11 CHƯA ĐẠT (dữ liệu thực tế — hạn tuần 9–10 đã qua, phần việc còn lại của khóa luận). Ghi nhận thẳng: toàn bộ kết quả RoomNetMT, ensemble và các con số bảo mật trong báo cáo này đo trên dữ liệu mô phỏng v2; chỉ có thể khẳng định hiệu năng trên nhà thật sau khi thu dữ liệu thực. Số liệu lấy từ results/before_original, results/after_optimized và results/g3_multitask (chạy thật 2026-10-11 và 2026-11-01, seed 42, lệnh tái lập ghi trong results/g3_multitask/README.md).", size=12)
 
 out = Path(__file__).resolve().parent / "BAO_CAO_KET_QUA.docx"
 doc.save(str(out))
