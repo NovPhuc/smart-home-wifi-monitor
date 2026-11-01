@@ -357,6 +357,57 @@ cả hai nhánh công việc (đã test chung 77/77 + node --check từng module
 4. **G4**: sinh lại BAO_CAO_KET_QUA.docx từ results mới (Times New Roman 13),
    cập nhật README (mục kiến trúc + API /api/stream).
 
+### Cập nhật 2026-11-01 (tối): G3b XONG + tối ưu security theo 2 tài liệu — commit `c3cd72e`
+
+Yêu cầu mới: "tối ưu đồ án dựa trên SECURITY_AUDIT_REPORT.md + SECURITY.md".
+
+**G3b — ensemble meta-learning (tất cả chạy thật, pytest 84/84):**
+- `src/smarthome/ensemble.py` — `select_best_candidate()` theo (macro_f1,
+  accuracy) trên VALIDATION (tie-break theo tên để tái lập được).
+- `scripts/train_ensemble.py` — đánh giá torch candidates (RoomNetLite/
+  SimpleCNN/RoomNetMT) + huấn luyện sklearn (kNN/RF/MLP, lưu joblib), chọn
+  best, ghi `model_choice.json` + `ensemble_val_metrics.json`. KHÔNG đụng test.
+- `inference.py` — `_load_room_model()`: đọc `model_choice.json` (mặc định
+  RoomNetLite); sklearn path dùng `predict_proba` trên cửa sổ duỗi phẳng
+  (thứ tự features-major khớp to_xy); `activity_model` head: dùng chính MT
+  khi được chọn, nạp riêng khi chỉ có roomnet_mt.pt; event thêm
+  `activity_model.state/probabilities` (luật vẫn là driver cảnh báo).
+- `train_home.py` thêm train_room_mt + train_ensemble; `full_pipeline.py`
+  thêm đủ 10 bước; `evaluate_room.py` thêm `--model`/`--output` (RoomNetLite
+  giữ tên file cũ cho /api/metrics).
+- **Kết quả `results/g3_multitask/`** (README đầy đủ trong thư mục):
+  ensemble chọn **RoomNetMT** (val F1 99.00%); test: RoomNetMT **99.16%/99.17%**,
+  latency **0.0193 ms** (RoomNetLite 98.99%, SimpleCNN 97.65%). RF test 99.16%
+  > RoomNetLite test nhưng THUA trên val — minh chứng chọn-theo-val là đúng.
+  act_agreement 97.32%. Anomaly KHÔNG chạy lại (G3 không đổi model anomaly).
+  K-fold MT chưa chạy (không chặn kết luận; làm khi còn thời gian G4).
+
+**Tối ưu security theo 2 tài liệu:**
+- Kiểm chứng từng finding của SECURITY_AUDIT_REPORT.md: ~90% là false positive
+  của scanner (pattern `DES` khớp "DESC"/"description" do IGNORECASE; scanner
+  tự quét chính regex của nó; dò dependency chỉ theo TÊN package — báo oan
+  `requests>=2.31`; Kotlin pattern dính precedence — mọi dòng chứa "token"
+  bị báo kể cả `findViewById`; DB heuristic báo oan `meta.key`/`rooms._name_key`).
+  Android chỉ có MỘT Log thật (cảnh báo HTTP LAN, không log token).
+- Sửa 7 lỗi scanner: `\b` + case-sensitive cho crypto, tự-loại-trừ file công
+  cụ audit, bỏ qua dòng comment + marker `# nosec` (giống bandit), Kotlin Log
+  pattern sửa precedence, dependency so version thật, DB_COLUMN_ALLOWLIST có
+  giải thích, git-history hạ INFO (nhắc từ khóa ≠ chứa bí mật). Thêm wrapper
+  UTF-8 cho console cp1252.
+- 2 dòng đã soát tay được đánh dấu `# nosec` kèm lý do: storage.py PRAGMA
+  (hằng số int module, PRAGMA không nhận tham số ràng buộc) + SQL test
+  (bảng từ tuple cố định).
+- **Kết quả: 69 findings (10 HIGH) → 4 INFO**, toàn bộ là thiết kế có chủ đích
+  đã ghi trong SECURITY.md (mDNS, pin expiry 2027-11-01, HTTP LAN/NSD).
+
+### Còn lại (phiên tới)
+1. **G4**: sinh lại BAO_CAO_KET_QUA.docx từ results/g3_multitask + after_optimized
+   (Times New Roman 13, qua make_report.py), cập nhật README (kiến trúc mới:
+   module server, SSE, RoomNet-MT, ensemble).
+2. Tùy chọn: k-fold 5×RoomNetMT; đánh giá demo dashboard với model_choice
+   (hiện models/ toàn cục chưa dán model_choice — giữ nguyên hành vi demo cũ,
+   quyết định dán khi duyệt).
+
 ## Phiên 8 (2026-10-31): kiểm tra bảo mật + kiểm tra chức năng
 
 Báo cáo đầy đủ: `docs/11_kiem_tra_bao_mat.md`. Cách làm: đọc mã theo từng lớp tấn công rồi
