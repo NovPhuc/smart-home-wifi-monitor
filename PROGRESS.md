@@ -429,6 +429,51 @@ Yêu cầu mới: "tối ưu đồ án dựa trên SECURITY_AUDIT_REPORT.md + SE
 2. Tùy chọn: k-fold RoomNetMT; quyết định dán model_choice.json vào models/
    toàn cục cho demo; slide thuyết trình.
 
+## Phiên 11 (2026-11-02): hoàn thành báo cáo khóa luận + backup script
+
+### Báo cáo khóa luận — HOÀN THÀNH (commit `cbbb74f` + phần này)
+- **8.2/8.3/8.4 viết lại bằng số thật** (số bịa đã quét sạch: 0 occurrence cho
+  87.3%/0.934/sensitivity 88%/Pi benchmark): RoomNetLite test 98.99% + per-room
+  F1 (Bathroom thấp nhất 98.33%), RoomNetMT 99.16/99.17 + act_agreement 97.32%,
+  anomaly hybrid P=100% R=99% F1=99.50% (166 mẫu, threshold 1.6089 grid search),
+  K-fold 97.80%±1.06%. Mục 8.4 ghi thẳng "CHƯA KIỂM THỬ" với cơ chế + kịch bản
+  đề xuất thay bảng bịa.
+- **Chèn lại 8.6** (so sánh 6 model + bài học RF thua val) và **chương 9
+  TRIỂN KHAI THỰC TẾ** (Docker multi-stage, compose.prod 6 dịch vụ, HTTPS hai
+  phương án Let's Encrypt/Cloudflare Tunnel, Android prod + pinning, health
+  check) + **chương 10** (10.1 thành quả thật, 10.2 hạn chế 7 mục, 10.3
+  nếu/có thể) — mất do race lần trước, đã dựng lại theo docker-compose.prod.yml
+  và SECURITY.md thực tế.
+- Sửa 7.1 heading "Mô hình??", dòng kết bỏ "TS. Nguyễn Van A"/năm 2024.
+- **BAO_CAO_KHOA_LUAN.docx** sinh lại bằng make_thesis_docx.py: **13 bảng,
+  967 đoạn, ~48k ký tự**, TNR 16/13, verify ĐẠT toàn bộ (số liệu thật, không
+  cụm AI theo avoid.md, không số bịa).
+
+### Code bổ sung
+- **`scripts/backup_db.py`** (mới): sqlite backup API (an toàn khi WAL đang
+  ghi), integrity_check trước khi lưu, kiểm tra bản backup đọc được, xoay
+  vòng --keep, đồng bộ node phụ/cloud qua BACKUP_REMOTE (rclone/scp). Chạy
+  thật: backup 0.12 MB, 12 bảng, rotation hoạt động.
+- **`.dockerignore`**: gộp bản của agent khác + các mục bảo mật (data/, .env,
+  certs/, backup docx) — lần trước tôi ghi đè mất bản của họ, đã khôi phục
+  đủ cả hai phần.
+- `.gitignore` thêm `data/backups/`.
+
+### Agent khác đã làm (phiên 11 của họ, commit `371ec80`, `3fede99`)
+- Sửa 6 lỗi chặn deploy (prod chạy Werkzeug dev server → **gunicorn gthread
+  cho SSE**, nginx upstream trùng, DOMAIN shell, cert mount...), wsgi.py,
+  DEPLOY.md, .env.prod.example — **kiểm chứng Docker thật: image build OK,
+  container healthy, /api/health 200**.
+- **Redis-backed rate limiter** trong security_middleware.py: dual-mode
+  (Redis sorted set sliding window / RAM fallback khi Redis lỗi), client ID =
+  IP + UA hash — mục "rate limit phân tán" của đề bài đã xong.
+- README cập nhật phần triển khai.
+
+### Còn lại
+- Thu dữ liệu RSSI thực tế (bắt buộc, cần thiết bị).
+- K-fold RoomNetMT; slide thuyết trình.
+- Lưu ý venv dev: pandas 3.1.0 (major) vs docker <2.3 — cân nhắc pin khi ổn.
+
 ## Phiên 10 (2026-11-01, đêm): viết dài báo cáo khóa luận — DỞ GIỮA CHỖ, CẦN TIẾP TỤC NGAY
 
 Yêu cầu: (1) viết báo cáo dài + check đạo văn/AI + chỉnh format (kèm `E:\Downloads\avoid.md`
@@ -749,3 +794,65 @@ Tunnel cần token + tài khoản thật; Let's Encrypt thật cần tên miền
 dùng chứng chỉ tự ký); chưa `up` cả 4 service cùng lúc.
 
 **Còn lại của roadmap:** "server chung", "lưu trữ phân tán", và viết báo cáo (60%).
+
+## Phiên 13 (2026-11-02): bảo mật — hạn phiên đăng nhập + CSV header, tinh chỉnh UI
+
+Báo cáo đầy đủ: `docs/15_bao_mat_phien_csv_ui.md`. Không commit. Không đụng
+thuật toán, dữ liệu, API.
+
+### Yêu cầu
+Tiếp bản phân tích bảo mật của phiên trước: sửa việc quan trọng nhất trước.
+Chọn 2 lỗ hổng sửa được ngay trong code (không cần quyết định hạ tầng): cookie
+phiên không có hạn server-side, và CSV injection còn sót ở dòng header export.
+Kèm yêu cầu "tối ưu giao diện đẹp hơn" — làm kiểu tinh chỉnh nhỏ, dùng lại token
+thiết kế sẵn có (theo tinh thần `tinhnang.md`: tham khảo mẫu mã nguồn mở, không
+viết mới cả khối).
+
+### Đã làm
+1. **Hạn phiên (CAO):** phiên mang dấu `_iat` khi cấp; quá hạn 7 ngày (env
+   `SMART_HOME_SESSION_MAX_AGE_HOURS`, 0 = tắt) bị xóa ngay ở before_request
+   đầu tiên → route trả 401 chuẩn. Phiên thiếu `_iat` (cookie cũ) cũng bị từ
+   chối → mọi người đăng nhập lại đúng một lần sau nâng cấp. Logout vẫn giữ
+   nguyên hành vi cũ; Android Collector chỉ ảnh hưởng: đăng nhập lại sau 7 ngày.
+   - `app_security.py` (`SESSION_MAX_AGE_HOURS`, `mark_session_issued`,
+     `session_expired`), `security_middleware.py` (`install_session_guard`),
+     `app.py` (guard đầu tiên trong chuỗi), `routes/auth_views.py` (đặt `_iat`).
+2. **CSV header (TB):** `/api/export/scans.csv` áp `csv_formula_safe()` cho cả
+   `fieldnames` lẫn key của row (`track_views.py`) — key `=HYPERLINK(...)`
+   từ `/api/collect` không còn chạy công thức trong Excel; giá trị RSSI vẫn
+   map đúng cột.
+3. **UI:** tabular-nums cho số live; badge `#alertCount.has-pending` nền hổ phách
+   khi có cảnh báo (monitoring.js + CSS); accent mint nav active; scrollbar thin;
+   scroll-snap timeline; `.probability` 9px; `::selection` mint.
+4. Tài liệu: `docs/15_bao_mat_phien_csv_ui.md`; `.env.example` + README mục
+   Session ghi rõ hạn 7 ngày và đánh đổi Android.
+5. Tests: `test_expired_session_is_rejected` (quá hạn → 401, thiếu `_iat` → 401,
+   đăng nhập lại OK) và `test_csv_export_header_neutralizes_formula_in_ap_name`.
+
+### Sự cố môi trường (đã xử lý, có xin phép)
+Giữa phiên `.venv` bị hỏng (mất `pyvenv.cfg` + phần lớn site-packages; hai tiến
+trình `server\app.py` cũ giữ khóa file `.pyd` → WinError 5). Nguyên nhân khớp
+với ghi nhận ở trên: **agent khác đang xây lại venv song song**. Đã dừng 2
+server sau khi xin phép, tái tạo `pyvenv.cfg` (Python 3.11.9), ensurepip, cài
+lại gói + editable. Kết quả hội tụ đúng stack agent kia ghi: torch 2.15.0+cpu,
+numpy 2.4.6, pandas 3.1.0, sklearn 1.9.1. Server đã mở lại, health OK.
+
+### Kiểm chứng thật
+- `pytest tests -q`: **84 passed** (trước phiên: 82).
+- `node --check server/static/js/monitoring.js`: OK.
+- Smoke Chromium thật: đăng ký → dashboard đúng nhà; **phiên giữ vững qua
+  reload** (guard không làm vỡ phiên mới); `getComputedStyle` xác nhận 4 cải
+  tiến CSS hiệu lực; console sạch (1 lỗi 401 duy nhất là bước probe phiên trước
+  đăng nhập — flow cũ).
+- `/api/health` sau khi mở lại server: `{"status":"ok","database":"ok"}`.
+- `data/smarthome.db` không bị đụng (chỉ đăng ký 1 tài khoản test
+  `test-smoke@example.com` qua giao diện — xóa tay nếu muốn sạch).
+
+### Còn lại (thứ tự ưu tiên đã chốt trong phân tích)
+1. HTTPS LAN: tự ký cert + điền pin thật vào `network_security_config.xml`
+   (khung sẵn có) — cần quyết định hạ tầng của người dùng.
+2. Android: `collectorToken`/`sessionCookie` trong SharedPreferences →
+   EncryptedSharedPreferences.
+3. Login limiter khóa theo email vẫn cho phép DoS khóa tài khoản nạn nhân.
+4. Webhook bắt buộc `https://`; salt cho hash BSSID khi thu dữ liệu thật.
+5. Không chạy `git commit`/`git push`.

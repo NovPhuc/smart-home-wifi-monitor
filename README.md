@@ -123,7 +123,7 @@ Android WiFi Collector / Demo fingerprints
 ## Bảo mật và vận hành
 
 - **HTTPS:** đặt `SMART_HOME_SSL_CERT` + `SMART_HOME_SSL_KEY`; khi đó cookie session tự bật `Secure` và server gửi HSTS. Chạy HTTP trong LAN thì không gửi HSTS (tránh trình duyệt ghi nhớ nhầm).
-- **Session:** cookie tên `session`, `HttpOnly`, `SameSite=Lax`. Không đổi tên cookie vì Android Collector lưu/khôi phục phiên theo tên này.
+- **Session:** cookie tên `session`, `HttpOnly`, `SameSite=Lax`. Không đổi tên cookie vì Android Collector lưu/khôi phục phiên theo tên này. Mỗi phiên có hạn tối đa **7 ngày** (`SMART_HOME_SESSION_MAX_AGE_HOURS`, đặt `0` để tắt) — quá hạn server từ chối dù cookie còn ký hợp lệ, nên cookie bị đánh cắp không dùng được mãi; Android/điện thoại sẽ cần đăng nhập lại sau 7 ngày.
 - **Rate limit:** chỉ áp lên `/api/*` (dashboard/static không bị chặn). Vượt ngưỡng trả `429` kèm `Retry-After`. Nếu server nằm sau reverse proxy tin cậy, đặt `SMART_HOME_TRUST_PROXY=1` để dùng `X-Forwarded-For`; **không bật** khi client kết nối trực tiếp, nếu không client tự giả header sẽ vượt được giới hạn.
 - **Realtime:** dashboard mở `EventSource('/api/stream')`; máy chủ chỉ đẩy event khi dữ liệu đổi, gửi heartbeat 15 giây và giới hạn 32 kết nối. Stream kiểm tra lại quyền xem mỗi 2 giây nên thành viên bị gỡ sẽ mất kết nối. Nếu SSE lỗi, dashboard tự quay về polling 3 endpoint như cũ.
 - **Giao diện:** `server/static/app.js` chỉ là entry; các phần xác thực, dashboard, SSE, phòng/thiết bị, demo, cảm biến, huấn luyện và chia sẻ nằm trong `server/static/js/`. Không cần bước build; service worker cache `an-tam-home-v6` chứa đủ module.

@@ -1,3 +1,7 @@
+# .dockerignore — thu nhỏ build context và tránh đưa bí mật/dữ liệu vào image
+# (Dockerfile stage dev/full-source dùng COPY . . — không loại trừ thì image
+# sẽ chứa .venv ~2GB, database người dùng thật và khóa session.)
+
 # Bytecode & cache
 __pycache__/
 *.pyc
@@ -6,10 +10,26 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
-# Virtual env
+# Môi trường Python
 .venv/
 venv/
 env/
+
+# Dữ liệu và bí mật — KHÔNG BAO GIỜ vào image (prod mount volume riêng)
+data/
+models/
+models/homes/
+.env
+.env.*
+!.env.example
+data/secret_key
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+certs/
+certbot-www/
+hub/
 
 # IDE & OS
 .vscode/
@@ -23,22 +43,27 @@ train_*.log
 runlogs/
 notebooks/
 backup_original/
+output/
 
-# Model & data (nếu không mount volume)
-models/
-data/*.db
-data/*.sqlite
-
-# Android build
+# Android build (chỉ cần source)
 android_collector/.gradle/
+android_collector/.idea/
+android_collector/.kotlin/
 android_collector/build/
 android_collector/app/build/
 android_collector/local.properties
+android_collector/app/build/outputs/
 
-# CI/CD & misc
+# Công cụ làm việc cục bộ + tài liệu nháp
+.git/
 .github/
 .tmp/
 .trace-mcp/
 .playwright-cli/
 *.bat
 Dockerfile.zip
+chay-2-agent.ps1
+SECURITY_AUDIT_REPORT.md
+BAO_CAO_KHOA_LUAN.docx
+BAO_CAO_KHOA_LUAN.md
+BAO_CAO_KET_QUA.docx
