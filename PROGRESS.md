@@ -848,11 +848,65 @@ numpy 2.4.6, pandas 3.1.0, sklearn 1.9.1. Server đã mở lại, health OK.
 - `data/smarthome.db` không bị đụng (chỉ đăng ký 1 tài khoản test
   `test-smoke@example.com` qua giao diện — xóa tay nếu muốn sạch).
 
+### Đã làm (bổ sung trong ngày, cùng phiên)
+6. **Android mã hóa prefs nhạy cảm** bằng Android Keystore AES/GCM (không thêm
+   thư viện; tương thích ngược plaintext cũ; Keystore lỗi → giữ hành vi cũ).
+   `gradlew assembleDebug` BUILD SUCCESSFUL. Vá mục 2 trong danh sách còn lại.
+7. **Webhook `http://`** ghi log cảnh báo mỗi lần gửi (không chặn cứng — một số
+   dịch vụ tự host LAN chỉ có HTTP).
+8. **Xóa tài khoản test** `test-smoke@example.com` khỏi DB (backup
+   `.tmp/smarthome.db.bak-2026-11-02`; DB còn đúng 1 nhà thật).
+9. Chạy lại `pytest tests -q` sau các bổ sung: **84 passed**.
+
 ### Còn lại (thứ tự ưu tiên đã chốt trong phân tích)
 1. HTTPS LAN: tự ký cert + điền pin thật vào `network_security_config.xml`
    (khung sẵn có) — cần quyết định hạ tầng của người dùng.
-2. Android: `collectorToken`/`sessionCookie` trong SharedPreferences →
-   EncryptedSharedPreferences.
-3. Login limiter khóa theo email vẫn cho phép DoS khóa tài khoản nạn nhân.
-4. Webhook bắt buộc `https://`; salt cho hash BSSID khi thu dữ liệu thật.
+2. ~~Android: EncryptedSharedPreferences~~ → **đã làm** bằng Android Keystore
+   AES/GCM (không thêm thư viện).
+3. Login limiter khóa theo email vẫn cho phép DoS khóa tài khoản nạn nhân —
+   cần quyết định thiết kế (kết hợp khóa theo IP hoặc nâng ngưỡng).
+4. ~~Webhook chỉ nhận `https://`~~ → **đã làm** theo hướng cảnh báo log.
+   Salt cho hash BSSID khi thu dữ liệu thật — vẫn còn.
 5. Không chạy `git commit`/`git push`.
+
+## Phiên 12 (2026-11-02): lưu trữ phân tán (Redis) — kiểm chứng và sửa 3 lỗi
+
+Báo cáo kiểm chứng: `docs/13_luu_tru_phan_tan.md`.
+
+`docker-compose.prod.yml` đã khai báo service `redis` và code đã có nhánh `REDIS_HOST`,
+nhưng **chưa từng chạy thử** — package `redis` thậm chí không có trong `.venv`. Chạy thử thì
+nhánh Redis hỏng hoàn toàn.
+
+**Ba lỗi đã sửa:**
+
+1. **NGHIÊM TRỌNG — bật Redis là mọi request API trả HTTP 500.** `RateLimiter` bị dán hai lần
+   thân class, sinh ra **hai định nghĩa `check`**; bản Python dùng (bản sau) đi thẳng vào
+   `with self._lock:` mà không xét `_use_redis`, trong khi `__init__` chỉ tạo `_lock` khi
+   KHÔNG dùng Redis. Hễ đặt `REDIS_HOST` — đúng cấu hình compose — là
+   `AttributeError: 'RateLimiter' object has no attribute '_lock'` → HTTP 500. Không phát hiện
+   sớm vì `/api/health` được miễn giới hạn nên smoke test qua đó vẫn xanh.
+   Đã xoá định nghĩa trùng và cho `__init__` **luôn** tạo sẵn cấu trúc RAM. Cùng kiểu lỗi với
+   `_client_id` (hai định nghĩa; bản chạy chỉ dùng IP còn tài liệu ghi "IP+UA") — đã gom còn
+   một, giữ **chỉ IP** vì `User-Agent` do client tự đặt nên đưa vào khoá là tự cho kẻ tấn công
+   thêm bucket mỗi request.
+2. **Rate limit phân tán không nguyên tử.** `ZCARD` rồi `ZADD` ở hai lượt ⇒ 60 request đồng
+   thời với ngưỡng 10 cho qua **29**. Đã gộp trim→đếm→kiểm tra chặn→ghi vào **một script Lua**:
+   còn đúng **10**. Member sorted set nay có thêm phần ngẫu nhiên (trước lấy chính mốc thời
+   gian nên hai request cùng thời điểm ghi đè nhau, bị đếm thiếu).
+3. **Redis chết thì im lặng.** `except Exception: return None` khiến ứng dụng âm thầm chạy RAM:
+   người vận hành tưởng hạn mức vẫn chia sẻ giữa các instance. Nay log rõ ràng, phân biệt
+   "không đặt REDIS_HOST" (im lặng, đúng ý) với "đặt mà nối không được" (cảnh báo). `reset()`
+   cũng xoá cả khoá trên Redis.
+
+**Kiểm chứng đã chạy thật** (Redis 7 trong Docker):
+- `scripts/rate_limit_probe.py` (mới): chế độ Redis nguyên tử (10/60) và **chia sẻ giữa hai
+  tiến trình** (5+0=5); chế độ RAM nguyên tử nhưng không chia sẻ (5+5=10) — đúng thiết kế.
+- Ứng dụng thật với `REDIS_HOST`: `dbsize=2`, khoá `ratelimit:auth:127.0.0.1` +
+  `ratelimit:api:127.0.0.1`, `cmdstat_evalsha calls=3` đúng bằng 3 request ⇒ dùng Redis thật,
+  không lặng lẽ rơi về RAM.
+- `tests/test_rate_limit.py` (mới, 7 test, không cần Redis thật): chốt các lỗi trên khỏi tái phát.
+- `pytest tests -q` → **91 passed**.
+
+**Còn lại:** `MobileSensorMonitor`, `last_results`, `runtime_histories`, `training_jobs` vẫn là
+trạng thái trong RAM từng tiến trình — muốn chạy nhiều instance thật thì phải chuyển tiếp hoặc
+ghim mỗi nhà vào một instance (sticky session).

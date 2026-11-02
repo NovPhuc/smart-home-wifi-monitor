@@ -27,8 +27,8 @@ LAN + tunnel HTTPS** của khóa luận, ưu tiên đơn giản, không cần d�
 
 ### 1.3. Rate limiting (server/security_middleware.py)
 
-Sliding window trong RAM theo (nhóm endpoint, client IP+UA), chặn 60 giây
-khi vượt ngưỡng:
+Sliding window theo (nhóm endpoint, **IP client** — không trộn User-Agent),
+chặn 60 giây khi vượt ngưỡng. Lưu ở **RAM** mặc định; nếu đặt `REDIS_HOST` thì lưu ở **Redis** để nhiều instance chia sẻ hạn mức (xem §1.9):
 
 | Nhóm | Ngưỡng | Ghi chú |
 |------|--------|---------|
@@ -190,3 +190,30 @@ Cả 4 đều là thiết kế đã được chấp nhận và ghi trong tài li
 
 `security_sweep.py` → **39 tổ hợp / 34 route `/api/*`, 0 endpoint hở phân quyền**
 (chỉ 4 endpoint công khai có chủ đích: `login`, `logout`, `register`, `health`).
+
+### 1.9. Lưu trữ phân tán cho trạng thái dùng chung (Redis)
+
+Mặc định ứng dụng chạy một tiến trình và giữ hạn mức trong RAM. Khi chạy nhiều
+instance (gunicorn nhiều worker, hoặc nhiều container sau load balancer), hạn mức
+trong RAM là **mỗi tiến trình một bản** — 2 worker thì giới hạn thực tế gấp đôi.
+
+Đặt `REDIS_HOST` (và tuỳ chọn `REDIS_PORT`, `REDIS_DB`, `REDIS_PASSWORD`) để chuyển
+hạn mức sang Redis dùng chung:
+
+| | RAM (mặc định) | Redis (`REDIS_HOST` được đặt) |
+|---|---|---|
+| Phạm vi | một tiến trình | mọi instance dùng chung khoá |
+| Cấu trúc | `deque` + `threading.Lock` | sorted set + script Lua |
+| Redis chết | — | ghi cảnh báo, tự lùi về RAM cho tiến trình đó |
+
+Script Lua gộp *trim → đếm → kiểm tra chặn → ghi* vào một lượt, nên không có khe
+hở giữa lúc đọc và lúc ghi. Nếu tách thành hai lượt (đọc `ZCARD` rồi `ZADD`),
+60 request đồng thời với ngưỡng 10 cho qua **29** request; sau khi gộp còn đúng
+**10**. Đo bằng `scripts/rate_limit_probe.py`.
+
+Khoá định danh client là **chỉ IP**, cố ý không trộn `User-Agent`: UA do client
+tự đặt nên đưa vào khoá là tự cho kẻ tấn công thêm bucket mới mỗi request.
+
+Nếu Redis chết giữa chừng, ứng dụng **không** im lặng: nó ghi cảnh báo
+`[Redis] Không nối được ... RATE LIMIT CHẠY RAM, không chia sẻ giữa các instance`
+để người vận hành biết mức bảo vệ đã giảm.

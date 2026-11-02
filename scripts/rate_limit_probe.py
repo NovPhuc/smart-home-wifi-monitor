@@ -46,15 +46,20 @@ def probe_atomicity(limit: int = 10, threads: int = 60) -> dict:
             limiter._redis.delete(key)
 
     allowed = []
+    errors: list[str] = []
     lock = threading.Lock()
     barrier = threading.Barrier(threads)
 
     def one() -> None:
-        with app.test_request_context("/api/auth/login", environ_base={"REMOTE_ADDR": "203.0.113.7"}):
-            barrier.wait()                      # tất cả cùng lao vào một lúc
-            ok, _info = limiter.check("probe", limit, 60)
-        with lock:
-            allowed.append(ok)
+        try:
+            with app.test_request_context("/api/auth/login", environ_base={"REMOTE_ADDR": "203.0.113.7"}):
+                barrier.wait()                      # tất cả cùng lao vào một lúc
+                ok, _info = limiter.check("probe", limit, 60)
+            with lock:
+                allowed.append(ok)
+        except Exception as exc:                    # không để thread chết im lặng
+            with lock:
+                errors.append(f"{type(exc).__name__}: {exc}")
 
     workers = [threading.Thread(target=one) for _ in range(threads)]
     for worker in workers:
@@ -63,7 +68,9 @@ def probe_atomicity(limit: int = 10, threads: int = 60) -> dict:
         worker.join()
 
     passed = sum(1 for value in allowed if value)
-    return {"mode": mode, "limit": limit, "threads": threads, "allowed": passed}
+    return {"mode": mode, "limit": limit, "threads": threads, "allowed": passed,
+            "completed": len(allowed), "errors": len(errors),
+            "first_error": errors[0] if errors else None}
 
 
 def probe_shared_across_processes(limit: int = 5) -> dict:
@@ -124,6 +131,8 @@ def main() -> int:
     atomic = probe_atomicity()
     print("1. Tính nguyên tử (60 request đồng thời, ngưỡng 10)")
     print(f"   chế độ {atomic['mode'].upper()} · cho qua {atomic['allowed']}/{atomic['threads']} · ngưỡng {atomic['limit']}")
+    if atomic["errors"]:
+        print(f"   !! {atomic['errors']} thread lỗi, ví dụ: {atomic['first_error']}")
     if atomic["mode"] == "redis":
         if atomic["allowed"] > atomic["limit"]:
             print(f"   => VƯỢT NGƯỠNG {atomic['allowed'] - atomic['limit']} request: check-then-act không nguyên tử")
@@ -145,9 +154,17 @@ def main() -> int:
             print(f"   => KHÔNG chia sẻ: tổng {shared['total_allowed']} > ngưỡng {shared['limit']}")
     print()
 
-    client_id_note = "dùng UA" if "sha256" in sm.RateLimiter._client_id.__doc__ else "chỉ IP (xem chú thích hàm)"
-    print(f"3. _client_id hiệu lực : {client_id_note}")
-    print(f"   số định nghĩa trong class: {sm.RateLimiter.__dict__.get('_client_id').__class__.__name__}")
+    # `_client_id` được định nghĩa HAI lần trong class (một instance method có
+    # docstring nói "IP + UA", một staticmethod ở dưới chỉ dùng IP). Python lấy
+    # định nghĩa sau cùng, nên bản hiệu lực là bản chỉ dùng IP.
+    import inspect
+    effective = sm.RateLimiter.__dict__["_client_id"]
+    source = inspect.getsource(effective)
+    uses_ua = 'headers.get("User-Agent"' in source   # đọc CODE, không đọc docstring
+    print("3. _client_id hiệu lực")
+    print(f"   kiểu            : {type(effective).__name__}")
+    print(f"   có dùng UA hash : {'có' if uses_ua else 'KHÔNG (chỉ IP)'}")
+    print(f"   số định nghĩa   : {source.count('def _client_id')} (trong class có 2 khai báo)")
     return 0
 
 

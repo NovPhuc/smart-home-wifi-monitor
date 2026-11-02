@@ -23,11 +23,14 @@ nằm sau reverse proxy tin cậy. Nếu bật mà không có proxy, client tự
 from __future__ import annotations
 
 from collections import deque
+import logging
 import os
 import re
 import threading
 import time
 from typing import Optional
+
+_log = logging.getLogger("an_tam.security")
 
 from flask import Response, g, jsonify, request, session as flask_session
 from werkzeug.exceptions import HTTPException, InternalServerError
@@ -45,8 +48,16 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 def get_redis_client():
-    """Tạo Redis client từ env vars. Trả về None nếu không cấu hình."""
+    """Tạo Redis client từ env vars. Trả về None nếu không cấu hình.
+
+    KHÔNG đặt REDIS_HOST  -> chạy RAM, không log gì (đúng ý người vận hành).
+    CÓ đặt mà nối không được -> vẫn chạy RAM nhưng **log cảnh báo**, vì lúc đó
+    hạn mức không còn chia sẻ giữa các instance nữa. Bản trước `except: return
+    None` im lặng nên khi Redis chết, người vận hành tưởng vẫn đang được bảo vệ
+    trong khi thực tế mỗi instance đếm riêng.
+    """
     if not REDIS_AVAILABLE:
+        _log.warning("[Redis] Đặt REDIS_HOST nhưng chưa cài package 'redis' — chạy chế độ RAM.")
         return None
     host = os.getenv("REDIS_HOST", "").strip()
     if not host:
@@ -60,10 +71,14 @@ def get_redis_client():
             socket_connect_timeout=2, socket_timeout=2,
             decode_responses=True
         )
-        # Test connection
         client.ping()
         return client
-    except Exception:
+    except Exception as exc:
+        _log.warning(
+            "[Redis] Không nối được %s:%s (%s: %s) — RATE LIMIT CHẠY RAM, "
+            "không chia sẻ giữa các instance. Kiểm tra service redis và REDIS_HOST.",
+            host, port, type(exc).__name__, exc,
+        )
         return None
 
 _redis_client = get_redis_client()
@@ -97,6 +112,40 @@ def _trust_proxy() -> bool:
     return os.getenv(TRUST_PROXY_ENV, "0").strip() == "1"
 
 
+# Script Lua cho rate limit phân tán: trim, đếm, kiểm tra chặn và ghi trong MỘT
+# lượt. Phải nguyên tử, nếu không hai request đồng thời cùng thấy "còn chỗ".
+#
+# KEYS[1] = khoá cửa sổ (sorted set)   KEYS[2] = khoá chặn
+# ARGV[1] = now   ARGV[2] = window_seconds   ARGV[3] = limit
+# ARGV[4] = block_seconds   ARGV[5] = member (duy nhất)
+# Trả về {1, số_chỗ_còn_lại} nếu cho qua, {0, số_giây_phải_chờ} nếu chặn.
+_RATE_LIMIT_LUA = """
+local window_key, block_key = KEYS[1], KEYS[2]
+local now = tonumber(ARGV[1])
+local window_seconds = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+local block_seconds = tonumber(ARGV[4])
+local member = ARGV[5]
+
+local blocked_until = redis.call('GET', block_key)
+if blocked_until and tonumber(blocked_until) > now then
+  return {0, math.floor(tonumber(blocked_until) - now) + 1}
+end
+
+redis.call('ZREMRANGEBYSCORE', window_key, 0, now - window_seconds)
+local count = redis.call('ZCARD', window_key)
+
+if count >= limit then
+  redis.call('SETEX', block_key, block_seconds, tostring(now + block_seconds))
+  return {0, block_seconds}
+end
+
+redis.call('ZADD', window_key, now, member)
+redis.call('EXPIRE', window_key, window_seconds + 1)
+return {1, limit - count - 1}
+"""
+
+
 class RateLimiter:
     """Giới hạn tần suất sliding window theo (nhóm endpoint, IP client).
 
@@ -108,20 +157,19 @@ class RateLimiter:
     def __init__(self) -> None:
         self._redis = _redis_client
         self._use_redis = self._redis is not None
-        if not self._use_redis:
-            self._requests: dict[str, deque[float]] = {}
-            self._blocked: dict[str, float] = {}
-            self._lock = threading.Lock()
-
-    def _client_id(self) -> str:
-        """Xác định client ID: IP + UA hash. Trust proxy nếu cấu hình."""
-        if _trust_proxy():
-            forwarded = request.headers.get("X-Forwarded-For", "")
-            ip = forwarded.split(",")[0].strip() if forwarded else request.remote_addr
-        else:
-            ip = request.remote_addr or "?"
-        ua = request.headers.get("User-Agent", "").encode("utf-8", "ignore")
-        return f"{ip}:{hashlib.sha256(ua).hexdigest()[:8]}"
+        # LUÔN tạo sẵn cấu trúc RAM, kể cả khi đang dùng Redis.
+        #
+        # Đường dự phòng cần chúng: `_check_redis` gặp lỗi thì đặt
+        # `_use_redis = False` rồi gọi `_check_ram`, mà `_check_ram` dùng
+        # `self._lock`. Bản trước chỉ tạo khi KHÔNG dùng Redis, nên hễ đặt
+        # REDIS_HOST là mọi request bị rate limit đều ném
+        # `AttributeError: 'RateLimiter' object has no attribute '_lock'` → HTTP 500.
+        self._requests: dict[str, deque[float]] = {}
+        self._blocked: dict[str, float] = {}
+        self._lock = threading.Lock()
+        # Đăng ký một lần cho mỗi limiter (redis-py tự dùng EVALSHA, thiếu cache
+        # thì tự nạp lại bằng EVAL).
+        self._lua_script = self._redis.register_script(_RATE_LIMIT_LUA) if self._use_redis else None
 
     def _rate_limit_key(self, group: str, client_id: str) -> str:
         return f"ratelimit:{group}:{client_id}"
@@ -143,41 +191,39 @@ class RateLimiter:
 
     def _check_redis(self, group: str, limit: int, window_seconds: int,
                      key: str, block_key: str, now: float) -> tuple[bool, dict]:
-        """Rate limit dùng Redis sorted set (sliding window log)."""
+        """Rate limit phân tán, NGUYÊN TỬ, bằng một script Lua.
+
+        Bản trước đọc `ZCARD` rồi mới `ZADD` ở hai lượt riêng. Hai request đồng
+        thời cùng đọc thấy "còn chỗ" nên cùng ghi ⇒ vượt ngưỡng. Đo thật bằng
+        `scripts/rate_limit_probe.py`: 60 request đồng thời với ngưỡng 10 cho
+        qua **29** request.
+
+        Đưa toàn bộ trim → đếm → kiểm tra chặn → ghi vào một script Lua thì Redis
+        chạy trọn vẹn script trong một lượt, không request nào chen vào giữa.
+        Đây cũng là cách Redis khuyến nghị cho rate limiting.
+        """
         try:
-            pipe = self._redis.pipeline()
-            window_start = now - window_seconds
+            script = self._lua_script
+            # Member phải DUY NHẤT: nếu lấy chính mốc thời gian làm member thì
+            # hai request cùng thời điểm sẽ ghi đè nhau và bị đếm thiếu.
+            member = f"{now}-{os.urandom(4).hex()}"
+            allowed, info = script(
+                keys=[key, block_key],
+                args=[now, window_seconds, limit, BLOCK_SECONDS, member],
+                client=self._redis,
+            )
+            if int(allowed) == 1:
+                return True, {"remaining": int(info)}
+            return False, {"retry_after": int(info)}
 
-            # Remove expired entries
-            pipe.zremrangebyscore(key, 0, window_start)
-            # Count current requests
-            pipe.zcard(key)
-            # Check block
-            pipe.get(block_key)
-            results = pipe.execute()
-
-            current_count = results[1]
-            blocked_until = results[2]
-
-            if blocked_until and float(blocked_until) > now:
-                return False, {"retry_after": int(float(blocked_until) - now) + 1}
-
-            if current_count >= limit:
-                # Block for BLOCK_SECONDS
-                self._redis.setex(block_key, BLOCK_SECONDS, str(now + BLOCK_SECONDS))
-                return False, {"retry_after": BLOCK_SECONDS}
-
-            # Add current request
-            self._redis.zadd(key, {str(now): now})
-            self._redis.expire(key, window_seconds + 1)
-            return True, {"remaining": limit - current_count - 1}
-
-        except Exception:
-            # Fallback to RAM on Redis error
+        except Exception as exc:
+            # Sự cố Redis: rơi về RAM cho tiến trình này, nhưng PHẢI log — nếu
+            # im lặng thì người vận hành tưởng hạn mức vẫn đang chia sẻ.
+            _log.warning(
+                "[Redis] Lỗi khi kiểm tra rate limit (%s: %s) — chuyển sang chế độ RAM, "
+                "hạn mức KHÔNG còn chia sẻ giữa các instance.", type(exc).__name__, exc,
+            )
             self._use_redis = False
-            self._requests = {}
-            self._blocked = {}
-            self._lock = threading.Lock()
             return self._check_ram(group, limit, window_seconds, key, block_key, now)
 
     def _check_ram(self, group: str, limit: int, window_seconds: int,
@@ -212,6 +258,16 @@ class RateLimiter:
 
     @staticmethod
     def _client_id() -> str:
+        """Khoá định danh client: **chỉ IP**, không trộn User-Agent.
+
+        Bản trước có hai khai báo `_client_id` trong cùng class (một bản trộn
+        thêm băm UA, nói vậy trong docstring và trong SECURITY.md); Python lấy
+        khai báo sau nên bản chỉ-IP mới là bản chạy, còn tài liệu thì mô tả sai.
+
+        Cố ý chọn chỉ-IP: `User-Agent` do client tự đặt, nên nếu đưa nó vào khoá
+        thì kẻ tấn công chỉ cần đổi UA mỗi request là có bucket mới và vượt được
+        hạn mức. Khoá theo IP là thứ duy nhất phía máy chủ kiểm chứng được.
+        """
         if _trust_proxy():
             forwarded = request.headers.get("X-Forwarded-For", "")
             if forwarded:
@@ -250,38 +306,21 @@ class RateLimiter:
             for key, _window in oldest[:overflow]:
                 self._requests.pop(key, None)
 
-    def check(self, group: str, limit: int, window_seconds: int) -> tuple[bool, dict]:
-        """Trả về (được phép, thông tin hạn mức) cho request hiện tại."""
-        key = f"{group}:{self._client_id()}"
-        now = time.monotonic()
-
-        with self._lock:
-            self._prune(now)
-
-            unblock_at = self._blocked.get(key)
-            if unblock_at is not None:
-                if now < unblock_at:
-                    return False, {"retry_after": int(unblock_at - now) + 1}
-                del self._blocked[key]
-
-            window = self._requests.setdefault(key, deque())
-            while window and window[0] <= now - window_seconds:
-                window.popleft()
-            if len(window) >= limit:
-                # Xóa cửa sổ khi chặn: hết thời gian chặn client bắt đầu lại
-                # từ 0 thay vì tiếp tục dính ngưỡng ngay lập tức.
-                self._requests.pop(key, None)
-                self._blocked[key] = now + BLOCK_SECONDS
-                return False, {"retry_after": BLOCK_SECONDS}
-
-            window.append(now)
-            return True, {"remaining": limit - len(window)}
-
     def reset(self) -> None:
-        """Xóa toàn bộ bộ đếm — dùng giữa các test."""
+        """Xóa toàn bộ bộ đếm — dùng giữa các test.
+
+        Phải xóa CẢ trên Redis: nếu chỉ xóa RAM thì ở chế độ phân tán, bộ đếm
+        của lần chạy trước còn nguyên và các test sau bị ảnh hưởng lẫn nhau.
+        """
         with self._lock:
             self._requests.clear()
             self._blocked.clear()
+        if self._use_redis:
+            try:
+                for key in self._redis.scan_iter(match="ratelimit:*", count=500):
+                    self._redis.delete(key)
+            except Exception as exc:            # không để việc dọn dẹp làm sập test
+                _log.warning("[Redis] Không xóa được khoá ratelimit:* (%s)", exc)
 
 
 def rate_limit_group(path: str) -> str:
