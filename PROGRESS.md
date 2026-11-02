@@ -705,3 +705,47 @@ phòng/tên nhà thực sự nằm); hàng rào thật vẫn là truy vấn tham
 đã có. Cần lưu ý rủi ro chặn nhầm nếu sau này có endpoint nhận chuỗi tự do qua query string.
 `torch.load`/`joblib.load` khi nạp model là vector RCE cổ điển nếu file không đáng tin — ở đây
 file do chính pipeline sinh ra nên rủi ro thấp; có thể siết thêm bằng `weights_only=True`.
+
+## Phiên 11 (2026-11-02): triển khai Docker + Cloudflare + tên miền
+
+Báo cáo kiểm chứng: `docs/12_trien_khai.md`. Hướng dẫn thao tác: `DEPLOY.md`.
+
+Mục tiêu theo roadmap `tinhnang.md` — hạng mục cuối của phần code ("nén vào docker + host lên
+cloudflare + deploy domain"). Trước phiên này đã có khung (Dockerfile đa stage,
+docker-compose.prod.yml với Redis/nginx/certbot/cloudflared, nginx.conf) nhưng **chưa từng
+chạy thử**, và khi chạy thử thì lộ 6 lỗi chặn khởi động:
+
+1. `nginx.conf` khai báo `upstream app_backend` **hai lần** → nginx `[emerg] duplicate upstream`.
+2. `include proxy_params;` trong **7** location — file này thuộc gói Debian, **không có trong
+   `nginx:alpine`** → `[emerg] open() ... failed`. Header proxy đã đặt ở cấp `server` nên bỏ hẳn.
+3. **4** dòng dùng `${DOMAIN:-...}` — cú pháp shell, nginx không hiểu; file lại mount thẳng vào
+   `/etc/nginx/nginx.conf` nên envsubst template của image cũng không chạy.
+4. Compose mount chứng chỉ vào `/etc/nginx/certs` nhưng config đọc `/etc/letsencrypt/live/...`
+   (chỗ certbot ghi) → không tìm thấy chứng chỉ.
+5. **Image production chạy Werkzeug dev server**: compose ghi "Gunicorn + Flask" nhưng Dockerfile
+   `CMD ["python", "server/app.py"]`, và `gunicorn` thậm chí không có trong requirements.
+6. Gunicorn 26 báo `[ERROR] Control server error: Permission denied: '/home/appuser'` vì
+   `useradd -r` không tạo home.
+
+Đã sửa: viết lại `nginx.conf` (một upstream, bỏ include, tên miền thật, mount `/etc/letsencrypt`);
+thêm `server/wsgi.py` (không gọi `create_app()` lần hai để khỏi tách đôi singleton);
+`gunicorn>=22.0`; CMD `gunicorn --worker-class gthread --workers 2 --threads 8 --timeout 300`
+(worker `gthread` là bắt buộc vì dashboard dùng SSE ở `/api/stream`); tạo home cho `appuser`;
+thêm `.env.prod.example`, `DEPLOY.md`, `docs/12_trien_khai.md`; gitignore `certs/`,
+`certbot-www/`, `.env.prod` (chứa khoá riêng TLS).
+
+**Kiểm chứng đã chạy thật** (Docker 29.9.2):
+- `nginx -t` với `--add-host app:127.0.0.1` → **configuration file test is successful**.
+- `docker compose -f docker-compose.prod.yml config --quiet` → exit 0; `docker-compose.yml` cũng vậy.
+- `server/wsgi.py` gọi qua **giao diện WSGI thô** (không test client) → `200 OK` cho `/api/health`.
+- `docker build --target prod` → thành công, gunicorn 26.2.0 + torch 2.15.0+cpu.
+- `docker run` → container `Up (healthy)`, **0 dòng `[ERROR]`**, log có
+  `Using worker: gthread` + 2 worker + `Control socket listening at /home/appuser/.gunicorn/gunicorn.ctl`;
+  `GET /api/health` → 200 `{"status":"ok","database":"ok"}`; `GET /` → 200 có CSP;
+  `GET /api/stream` khi chưa đăng nhập → 401 (SSE vẫn được bảo vệ đúng).
+
+**Chưa kiểm chứng được ở máy này** (ghi rõ để không hiểu nhầm là đã thử hết): đường Cloudflare
+Tunnel cần token + tài khoản thật; Let's Encrypt thật cần tên miền trỏ về IP công khai (lần thử
+dùng chứng chỉ tự ký); chưa `up` cả 4 service cùng lúc.
+
+**Còn lại của roadmap:** "server chung", "lưu trữ phân tán", và viết báo cáo (60%).
