@@ -65,8 +65,17 @@ WORKDIR /app
 
 ENV PYTHONPATH=/app/src
 
-# Tạo user non-root
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+# Tạo user non-root.
+#
+# `useradd -r` (system account) KHÔNG tạo thư mục home. Gunicorn 26 mở một
+# "control server" và ghi socket vào $HOME/.gunicorn — không có home thì mỗi lần
+# khởi động in `[ERROR] Control server error: [Errno 13] Permission denied`.
+# Lỗi này không làm sập server nhưng làm nhiễu log và che mất lỗi thật.
+# Tạo home riêng thay vì trỏ HOME vào /app/data để socket không nằm lẫn trong
+# volume dữ liệu (dễ nhầm khi sao lưu).
+RUN groupadd -r appuser && useradd -r -g appuser appuser \
+    && mkdir -p /home/appuser && chown -R appuser:appuser /home/appuser
+ENV HOME=/home/appuser
 
 # Copy requirements CPU-only
 COPY requirements-docker.txt ./

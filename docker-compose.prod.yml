@@ -76,7 +76,11 @@ services:
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certs:/etc/nginx/certs:ro
+      # Phải là /etc/letsencrypt vì nginx.conf đọc
+      # /etc/letsencrypt/live/<domain>/fullchain.pem. Trước đây mount vào
+      # /etc/nginx/certs nên nginx không tìm thấy chứng chỉ và chết.
+      # certbot bên dưới cũng ghi vào cùng thư mục này qua /etc/letsencrypt.
+      - ./certs:/etc/letsencrypt:ro
       - ./certbot-www:/var/www/certbot:ro
     depends_on:
       - app
