@@ -894,7 +894,7 @@ self.addEventListener('fetch', (e) => {
 
 ## 7. BẢO MẬT HỆ THỐNG
 
-### 7.1. Mô hình威胁 (Threat Model)
+### 7.1. Mô hình đe dọa (Threat Model)
 
 | Asset | Threat | Mitigation |
 |-------|--------|------------|
@@ -1004,47 +1004,76 @@ CMD ["python", "server/app.py"]
 
 ### 8.1. Môi trường thử nghiệm
 
-| Môi trường | Cấu hình |
+| Mục | Cấu hình |
 |------------|----------|
-| **Train/Val/Test split** | 70/15/15 per room per session |
-| **Cross-validation** | 5-fold per room |
-| **Hardware test** | Raspberry Pi 4 8GB, Android 13 (Pixel 6a) |
-| **Mạng test** | LAN gigabit, 4 AP (2.4GHz ch 1/6/11, 5GHz ch 36) |
+| Máy chạy huấn luyện và đo số liệu | Máy phát triển Windows, CPU thường, PyTorch CPU (torch 2.15.0+cpu) |
+| Dữ liệu | Mô phỏng v2 (generate_synthetic_data.py): 8 session, 5 phòng; split theo session 6/1/1 |
+| Seed | 42 (mọi script; tái lập được theo results/g3_multitask/README.md) |
+| Baseline | SimpleCNN, RandomForest, MLP, kNN (scikit-learn) |
 
-### 8.2. Kết quả Định vị Phòng (RoomNet-Lite)
+Chưa thực hiện: đo trên thiết bị edge (Raspberry Pi/ESP32) và trên mạng LAN
+thật với AP vật lý — xem mục 10.2.
 
-| Metric | Train | Val | Test |
-|--------|-------|-----|------|
-| **Accuracy** | 94.2% | 89.7% | 87.3% |
-| **Macro F1** | 0.941 | 0.892 | 0.868 |
-| **Per-room Acc** | Bedroom: 91% | Living: 88% | Kitchen: 85% | Bath: 83% |
-| **Inference time** | 2.3ms (CPU) | 1.8ms (CPU) | 2.1ms (CPU) |
+### 8.2. Kết quả định vị phòng (test S08, seed 42)
 
-*Test trên Raspberry Pi 4 8GB, PyTorch CPU-only, batch=1*
+RoomNetLite (results/g3_multitask/models/room_test_metrics.json):
 
-### 8.3. Kết quả Phát hiện Bất thường (GRU-AE)
-
-| Metric | Giá trị |
+| Chỉ số | Giá trị |
 |--------|---------|
-| **AUC-ROC** | 0.934 |
-| **AUC-PR** | 0.782 |
-| **F1 @ quantile 0.99** | 0.71 |
-| **Precision @ 0.99** | 0.68 |
-| **Recall @ 0.99** | 0.75 |
-| **False positive rate** | 1.2% (trên dữ liệu bình thường) |
+| Test Accuracy | 98.99% |
+| Test Macro F1 | 98.99% |
+| Val Macro F1 (chọn model/early stopping) | 98.83% |
+| Độ trễ suy luận | 0,0367 ms/mẫu |
+| Độ trễ end-to-end (softmax + TopologyFilter) | 0,0246 ms/mẫu |
 
-*Ngưỡng: quantile 0.99 reconstruction error trên validation set*
+Macro F1 theo từng phòng: Bedroom 99.57%, Corridor 99.17%, Bathroom 98.33%
+(thấp nhất — ít AP riêng biệt), LivingRoom 98.74%, Kitchen 99.17%.
 
-### 8.4. Phát hiện Ngã (Mobile Sensor)
+RoomNetMT — model multi-task được ensemble chọn
+(results/g3_multitask/models/room_test_metrics_RoomNetMT.json):
 
-| Metric | Giá trị | Điều kiện test |
-|--------|---------|----------------|
-| **Sensitivity** | 88% | 50 vụ ngã mô phỏng (gậy test) |
-| **Specificity** | 94% | 200 hoạt động bình thường |
-| **Precision** | 85% |  |
-| **Latency phát hiện** | < 200ms | Từ impact đến alert |
+| Chỉ số | RoomNetMT | RoomNetLite (cùng đợt chạy) |
+|--------|-----------|------------------------------|
+| Test Accuracy | **99.16%** | 98.99% |
+| Test Macro F1 | **99.17%** | 98.99% |
+| Độ trễ (ms/mẫu) | 0,0193 | 0,0367 |
+| Head hoạt động — act_agreement (val) | 97.32% | không có |
 
-*Test trên 5 người khác nhau, 10 lần/người, điện thoại trong túi áo trước*
+K-fold 5-fold (results/after_optimized/kfold_metrics_roomnet.json):
+RoomNetLite 97.80% ± 1.06%, khoảng tin cậy 95% [96.88%, 98.73%].
+
+### 8.3. Kết quả phát hiện bất thường (GRU-AE + rules)
+
+Tập test tách riêng D13–D14 (166 sequence, không giao với train D01–D10 và
+chọn ngưỡng D11–D12) — results/after_optimized/anomaly_test_metrics.json:
+
+| Chỉ số | Hybrid (AE + Rules) | AE-only |
+|--------|---------------------|---------|
+| Precision | 100% | — |
+| Recall | 99% | — |
+| F1 | 99.50% | 98.48% |
+
+Ngưỡng reconstruction error 1.6089 (results/after_optimized/anomaly_threshold.json)
+— chọn bằng grid search quantile [0.90–0.995] trên validation D11–D12, không
+dùng quantile 0.99 cố định như bản gốc.
+
+Giới hạn: tập test chỉ chứa 2/4 loại bất thường (night_activity,
+unusual_transition_pattern) do dữ liệu mô phỏng chỉ đặt anomaly ở 4 ngày cuối
+— đã ghi ở mục 10.2.
+
+### 8.4. Phát hiện ngã (Mobile Sensor) — CHƯA KIỂM THỬ
+
+Chưa có số liệu đánh giá: hệ thống chưa được kiểm thử với accelerometer thật
+— đây là hạn chế được ghi rõ ở mục 10.2, không có con số nào ở bảng này để
+tránh báo cáo sai.
+
+Đã cài đặt (chờ kiểm thử): MobileSensorFusion + MobileSensorMonitor
+(src/smarthome/mobile_sensor.py, src/smarthome/inference.py:process_mobile_sensor)
+— phát hiện va chạm theo ngưỡng impact_threshold = 18 m/s², theo dõi trạng
+thái bất động sau va chạm (still_after_impact_seconds = 5s), cảnh báo
+CRITICAL qua /api/sensor và webhook. Kịch bản kiểm thử đề xuất: ngã mô phỏng
+trên đệm với 5 người × 10 lần, đối chiếu sensitivity/specificity — hẹn mục
+hướng phát triển.
 
 ### 8.5. Kích thước model và tài nguyên (đo thật trên máy phát triển)
 
@@ -1059,7 +1088,91 @@ CMD ["python", "server/app.py"]
 
 Lưu ý thẳng thắn: các số liệu trên đo trên máy phát triển (Windows, CPU
 thường), chưa đo trên thiết bị edge (Raspberry Pi/ESP32). Đánh giá tài nguyên
-trên thiết bị edge là việc còn lại — xem mục 10.2 và 10.3. Hướng phát triển
+trên thiết bị edge là việc còn lại — xem mục 10.2.
+
+## 9. TRIỂN KHAI THỰC TẾ
+
+### 9.1. Đóng gói Docker
+
+Dockerfile multi-stage 4 stage (base / dev / prod / archive): stage prod chạy
+Python 3.11-slim, PyTorch CPU-only (requirements-docker.txt), user không phải
+root (appuser), HEALTHCHECK gọi /api/health mỗi 30 giây. Build:
+
+```bash
+docker build -t an-tam-home:2310 --target prod .
+```
+
+### 9.2. docker-compose.prod.yml
+
+Sáu dịch vụ: app (an-tam-home:2310, không expose port ra ngoài), nginx
+(reverse proxy + SSL termination, port 80/443), redis (rate limit / cache dùng
+chung khi chạy nhiều worker, persistence appendonly), certbot (Let's Encrypt,
+profile ssl), certbot-init (cấp chứng chỉ lần đầu, profile ssl-init),
+cloudflared (Cloudflare Tunnel, profile tunnel, token từ biến môi trường
+CLOUDFLARE_TUNNEL_TOKEN). Volume ./data và ./models mount vào app để dữ liệu
+SQLite và model không nằm trong container.
+
+### 9.3. HTTPS và tên miền — hai phương án
+
+- **Let's Encrypt + Nginx**: đặt DOMAIN và CERTBOT_EMAIL trong .env, chạy
+  `docker compose -f docker-compose.prod.yml --profile ssl-init run certbot-init`,
+  rồi bật profile ssl (certbot renew tự động 12 giờ/lần).
+- **Cloudflare Tunnel** (không mở port, không cần chứng chỉ công khai): tạo
+  tunnel trên dashboard Cloudflare, đặt CLOUDFLARE_TUNNEL_TOKEN vào .env, chạy
+  `--profile tunnel`; trỏ tên miền đến tunnel trong dashboard. Cookie phiên tự
+  bật Secure khi server chạy HTTPS (app.py — secure_cookie_requested).
+
+### 9.4. Cấu hình Android cho production
+
+- URL server: dùng tên miền HTTPS thay cho http://IP-LAN.
+- Certificate pinning: ghim SPKI SHA-256 của chứng chỉ (từ cert_pins.txt);
+  luân chuyển pin trước hạn hết (network_security_config.xml, expiration
+  2027-11-01) — quy trình ở SECURITY.md mục 1.6.
+- Trong LAN vẫn dùng NSD (_antam._tcp) tự tìm server qua HTTP — thiết kế có
+  chủ đích, đã ghi trong SECURITY.md §1.6.
+
+### 9.5. Kiểm tra sau triển khai
+
+```bash
+curl https://<domain>/api/health   # {"status":"ok","database":"ok",...}
+```
+
+Lưu ý: rate limit nằm trong RAM từng tiến trình — chạy một worker là cấu hình
+được hỗ trợ; nếu chạy nhiều worker, chuyển bộ đếm sang Redis (đã có trong
+compose) — xem mục 10.3.
+
+## 10. KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN
+
+### 10.1. Tóm tắt thành quả
+
+1. **Định vị mức phòng** đạt 98.99% test accuracy với RoomNetLite và 99.16%
+   với RoomNetMT (results/g3_multitask/models/room_test_metrics*.json, seed 42)
+2. **Ensemble meta-learning** chọn model theo từng bộ dữ liệu trên validation,
+   không dùng tập test (scripts/train_ensemble.py, model_choice.json)
+3. **Phát hiện bất thường** bằng GRU-AE: hybrid AE+Rules F1 99.50% trên tập
+   test tách riêng D13–D14 (results/after_optimized/anomaly_test_metrics.json)
+4. **Head hoạt động** của RoomNetMT đồng thuận 97.32% với bộ luật trên
+   validation (roomnet_mt_val_metrics.json)
+5. **Bảo mật**: khóa session ngẫu nhiên, rate limit theo nhóm endpoint,
+   JSON-only guard, CSP/nosniff/X-Frame-Options, certificate pinning Android,
+   băm BSSID SHA-256 — chi tiết SECURITY.md; công cụ quét đã sửa còn 4 INFO
+6. **Triển khai**: Docker multi-stage, docker-compose.prod (Nginx/certbot/
+   Cloudflare Tunnel/Redis), PWA dashboard, NSD tự tìm server
+
+### 10.2. Hạn chế hiện tại
+
+- **Chưa có dữ liệu RSSI thực tế** — toàn bộ số liệu đo trên dữ liệu mô phỏng
+  v2; hạn tuần 9–10 của đề cương đã qua, đây là việc bắt buộc còn lại.
+- **Phát hiện ngã chưa kiểm thử** với accelerometer thật (mục 8.4).
+- **Chưa đo trên thiết bị edge** (Raspberry Pi/ESP32); số hiệu năng hiện tại
+  đo trên máy phát triển.
+- **Độ chính xác từng phòng chưa đồng đều**: Bathroom F1 98.33% (thấp nhất)
+  do ít AP riêng biệt.
+- **Rate limit trong RAM**: chạy nhiều worker cần bộ đếm dùng chung (Redis).
+- **Test anomaly** chỉ chứa 2/4 loại bất thường.
+- **Android collector** chưa chạy end-to-end trên thiết bị thật.
+
+### 10.3. Hướng phát triển
 
 Đã thực hiện trong khuôn khổ khóa luận: Docker multi-stage, docker-compose.prod
 (Nginx + certbot + Cloudflare Tunnel + Redis), certificate pinning Android,
@@ -1145,4 +1258,4 @@ docker run -d -p 5000:5000 \
 
 **KẾT THÚC BÁO CÁO**
 
-*Báo cáo này được viết bởi sinh viên Nguyễn Hoài Phúc dưới sự hướng dẫn của TS. Nguyễn Văn A. Tất cả mã nguồn, dữ liệu thử nghiệm, và tài liệu đi kèm là kết quả công việc nghiên cứu độc lập trong khóa luận tốt nghiệp Đại học năm 2024.*
+*Báo cáo được viết bởi sinh viên Nguyễn Hồài Phúc. Danh sách người hướng dẫn điền ở trang bìa. Toàn bộ mã nguồn, dữ liệu thử nghiệm và tài liệu kèm theo là kết quả công việc nghiên cứu của khóa luận.*
