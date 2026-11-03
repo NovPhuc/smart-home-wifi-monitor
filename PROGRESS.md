@@ -1007,3 +1007,20 @@ cậy 95% [96,88%, 98,73%]; phát hiện bất thường hybrid precision 100% /
 AE-only F1 98,48%, ngưỡng 1,6089, 166 mẫu test; kích thước model 49,0 KB · 104,5 KB · 113,1 KB.
 
 Không phát hiện số liệu nào không có nguồn.
+
+### Phiên 13 (tiếp): sửa mâu thuẫn giữa chương 10 và các chương đã cập nhật
+
+Rà lại phần kết luận thì phát hiện **báo cáo tự mâu thuẫn**: mục 10.2 (Hạn chế) và 10.3 (Hướng phát
+triển) vẫn liệt kê "Rate limit trong RAM — chạy nhiều worker cần bộ đếm dùng chung (Redis)" và
+"Lưu trữ phân tán… chuyển rate limit và phiên sang Redis" như việc **còn phải làm**, trong khi mục
+7.6 và 8.6 vừa chứng minh việc đó **đã làm và đã đo**. Đã sửa:
+
+- 10.1: tách thành 7 mục, thêm mục 6 về hạn mức phân tán (kèm số đo 10/60 so với 29/60) và mục 7 về
+  triển khai (gunicorn `gthread`, 6 lỗi chặn khởi động đã sửa).
+- 10.2: bỏ hạn chế sai, thay bằng hạn chế đúng — hạn mức đã chuyển sang Redis nhưng trạng thái cảm
+  biến, lịch sử suy luận và tiến độ huấn luyện thì chưa.
+- 10.3: chuyển "lưu trữ phân tán" từ việc tương lai sang phần còn lại (phiên, lịch sử, model artifact
+  lên S3/MinIO); ô "Rate limit phân tán" đổi thành việc chuyển nốt trạng thái cảm biến.
+
+Đã quét lại toàn văn các cụm có thể đã lỗi thời (`rate limit trong RAM`, `python server/app.py`,
+`phải chuyển sang bộ đếm dùng chung`…) — không còn câu nào.

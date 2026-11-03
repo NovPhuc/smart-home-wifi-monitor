@@ -1475,11 +1475,18 @@ compose) — xem mục 10.3.
    test tách riêng D13–D14 (results/after_optimized/anomaly_test_metrics.json)
 4. **Head hoạt động** của RoomNetMT đồng thuận 97.32% với bộ luật trên
    validation (roomnet_mt_val_metrics.json)
-5. **Bảo mật**: khóa session ngẫu nhiên, rate limit theo nhóm endpoint,
-   JSON-only guard, CSP/nosniff/X-Frame-Options, certificate pinning Android,
-   băm BSSID SHA-256 — chi tiết SECURITY.md; công cụ quét đã sửa còn 4 INFO
-6. **Triển khai**: Docker multi-stage, docker-compose.prod (Nginx/certbot/
-   Cloudflare Tunnel/Redis), PWA dashboard, NSD tự tìm server
+5. **Bảo mật**: khóa session ngẫu nhiên, hạn mức tần suất theo nhóm endpoint,
+   JSON-only guard, CSP/nosniff/X-Frame-Options, băm BSSID SHA-256; lớp ghim
+   chứng chỉ Android đã được vá sau khi phát hiện lỗi khiến nó tự vô hiệu; quét
+   phân quyền 39 tổ hợp route không hở; quét mã tĩnh sau khi sửa chính bộ quét
+   còn 4 mức thông tin (SECURITY.md và mục 8.6)
+6. **Hạn mức tần suất phân tán**: bộ đếm dùng chung qua Redis khi đặt
+   `REDIS_HOST`, gộp thành một script Lua nguyên tử. Đo trên Redis thật: 60
+   request đồng thời với ngưỡng 10 cho qua đúng 10 (bản đọc-rồi-ghi cho qua 29),
+   và hai tiến trình cộng dồn đúng vào một hạn mức (mục 7.6)
+7. **Triển khai**: Docker multi-stage, gunicorn worker `gthread` cho SSE,
+   docker-compose.prod (Nginx/certbot/Cloudflare Tunnel/Redis), PWA dashboard,
+   NSD tự tìm server; đã chạy thật và sửa 6 lỗi chặn khởi động (mục 8.7)
 
 ### 10.2. Hạn chế hiện tại
 
@@ -1490,7 +1497,10 @@ compose) — xem mục 10.3.
   đo trên máy phát triển.
 - **Độ chính xác từng phòng chưa đồng đều**: Bathroom F1 98.33% (thấp nhất)
   do ít AP riêng biệt.
-- **Rate limit trong RAM**: chạy nhiều worker cần bộ đếm dùng chung (Redis).
+- **Trạng thái khác vẫn nằm trong RAM từng tiến trình**: hạn mức tần suất đã
+  chuyển được sang Redis, nhưng trạng thái cảm biến chuyển động, lịch sử suy luận
+  tạm thời và tiến độ huấn luyện thì chưa. Muốn chạy nhiều instance thật vẫn phải
+  ghim mỗi căn nhà vào một instance, hoặc chuyển nốt các phần đó.
 - **Test anomaly** chỉ chứa 2/4 loại bất thường.
 - **Android collector** chưa chạy end-to-end trên thiết bị thật.
 
@@ -1498,13 +1508,13 @@ compose) — xem mục 10.3.
 
 Đã thực hiện trong khuôn khổ khóa luận: Docker multi-stage, docker-compose.prod
 (Nginx + certbot + Cloudflare Tunnel + Redis), certificate pinning Android,
-rate limit nhiều tầng. Các hướng dưới đây là phương án **nếu** có thời gian và
-điều kiện **có thể** triển khai tiếp:
+hạn mức tần suất nhiều tầng và bản phân tán dùng chung qua Redis. Các hướng dưới
+đây là phương án **nếu** có thời gian và điều kiện **có thể** triển khai tiếp:
 
 | Ngắn hạn (nếu tiếp tục phát triển) | Trung hạn (có thể làm sau khóa luận) | Dài hạn (cần nguồn lực) |
 |----------------------|------------------------|-------------------|
-| **Server chung nhiều gia đình**: schema đã hỗ trợ nhiều tài khoản/nhà trên một máy chủ; nếu mở rộng cần bảng gói dịch vụ và phân cách tài nguyên | **Lưu trữ phân tán**: SQLite đủ cho một máy chủ; nếu chạy nhiều worker/nhiều node, chuyển rate limit và phiên sang Redis (compose.prod có sẵn Redis), model artifact lưu S3/MinIO | Federated learning giữa các nhà (privacy-preserving) |
-| **Rate limit phân tán**: bộ đếm hiện nằm trong RAM từng tiến trình; nếu chạy >1 worker phải chuyển sang bộ đếm dùng chung | **Backup tự động**: sqlite backup API + đồng bộ lên node phụ (rclone/scp) | Radar mmWave phát hiện ngã không cần điện thoại |
+| **Server chung nhiều gia đình**: schema đã hỗ trợ nhiều tài khoản/nhà trên một máy chủ; nếu mở rộng cần bảng gói dịch vụ và phân cách tài nguyên | **Lưu trữ phân tán (phần còn lại)**: hạn mức tần suất đã dùng Redis; còn phiên đăng nhập và lịch sử suy luận, cùng việc đưa model artifact lên S3/MinIO | Federated learning giữa các nhà (privacy-preserving) |
+| Chuyển nốt trạng thái cảm biến và lịch sử suy luận sang Redis để chạy nhiều instance mà không cần ghim mỗi nhà vào một instance | **Backup tự động**: sqlite backup API + đồng bộ lên node phụ (rclone/scp) | Radar mmWave phát hiện ngã không cần điện thoại |
 | K-fold cho RoomNetMT; thu dữ liệu RSSI thực tế (việc bắt buộc còn lại) | Multi-person tracking (WiFi CSI) | Tích hợp hệ thống y tế (EMR) |
 | Thêm cảm biến môi trường (nhiệt độ, độ ẩm) | Auto-retrain khi dữ liệu drift | Dự đoán xu hướng sức khỏe dài hạn |
 
