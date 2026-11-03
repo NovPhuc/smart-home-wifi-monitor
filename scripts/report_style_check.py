@@ -137,7 +137,9 @@ def check_ai_style(prose: list[tuple[int, str]]) -> list[tuple[str, int, str]]:
     # nên gắn cờ oan cho cả gạch đầu dòng liệt kê.
     for line_no, line in prose:
         stripped = line.strip()
-        if re.match(r"^[-*+]\s", stripped) or stripped.startswith("|"):
+        # Bỏ qua tiêu đề mục và bảng: "Kiểm thử phần mềm, phân quyền và bảo mật"
+        # là tên mục, không phải câu văn dùng quy tắc số 3.
+        if re.match(r"^[-*+]\s", stripped) or stripped.startswith("|") or stripped.startswith("#"):
             continue
         # Bỏ `mã nội tuyến` và nội dung trong ngoặc trước khi tách: tên tham số
         # như (`center_loss_weight`, `temporal_loss_weight`) không phải văn xuôi.
