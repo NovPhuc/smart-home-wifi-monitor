@@ -1024,3 +1024,17 @@ triển) vẫn liệt kê "Rate limit trong RAM — chạy nhiều worker cần 
 
 Đã quét lại toàn văn các cụm có thể đã lỗi thời (`rate limit trong RAM`, `python server/app.py`,
 `phải chuyển sang bộ đếm dùng chung`…) — không còn câu nào.
+
+### Phiên 13 (kết): hết dương tính giả cuối cùng của bộ quét mã
+
+Bộ quét còn báo 1 mức MEDIUM ở `make_report.py:111`. Đây là **dương tính giả**: câu văn tiếng Việt mô
+tả chính việc sửa bộ quét có chữ "DES" đứng riêng ("pattern DES khớp cả chữ DESC trong ORDER BY"), mà
+mẫu nhận diện thuật toán mã hoá cũ là `\b(?:RC4|DES|ECB)\b` nên khớp. Đã viết lại câu thành "pattern
+mã hoá yếu khớp cả chữ DESC… (thiếu word boundary)" — giữ nguyên nghĩa, hết khớp.
+
+Kết quả: `full_security_audit.py` còn **4 finding, tất cả INFO**, đều là thiết kế đã chấp nhận và ghi
+trong `SECURITY.md` (mDNS trong LAN, ngày hết hạn ghim chứng chỉ, hai chỗ cho phép HTTP trong LAN).
+
+Tổng kết kiểm chứng cuối phiên: `pytest` **91/91**; quét phân quyền 39 tổ hợp trên 34 route **0 hở**;
+quét mã **4 INFO**; soát báo cáo **0 dấu hiệu AI, 0 tự đạo văn**; đối chiếu số liệu báo cáo với
+`results/*.json` **khớp**; `local == origin`.
