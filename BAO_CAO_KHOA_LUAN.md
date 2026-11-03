@@ -1283,7 +1283,7 @@ RoomNetLite (results/g3_multitask/models/room_test_metrics.json):
 | Chỉ số | Giá trị |
 |--------|---------|
 | Test Accuracy | 98.99% |
-| Test Macro F1 | 98.99% |
+| Test Macro F1 | 99.00% |
 | Val Macro F1 (chọn model/early stopping) | 98.83% |
 | Độ trễ suy luận | 0,0367 ms/mẫu |
 | Độ trễ end-to-end (softmax + TopologyFilter) | 0,0246 ms/mẫu |
@@ -1297,7 +1297,7 @@ RoomNetMT — model multi-task được ensemble chọn
 | Chỉ số | RoomNetMT | RoomNetLite (cùng đợt chạy) |
 |--------|-----------|------------------------------|
 | Test Accuracy | **99.16%** | 98.99% |
-| Test Macro F1 | **99.17%** | 98.99% |
+| Test Macro F1 | **99.17%** | 99.00% |
 | Độ trễ (ms/mẫu) | 0,0193 | 0,0367 |
 | Head hoạt động — act_agreement (val) | 97.32% | không có |
 

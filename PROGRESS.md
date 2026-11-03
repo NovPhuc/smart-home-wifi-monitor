@@ -990,3 +990,20 @@ toàn bộ dùng số đo thật của các phiên trước:
   (healthy)` với 0 dòng `[ERROR]`, worker `gthread`, `/api/stream` trả 401 khi chưa đăng nhập), kèm
   phần nói rõ những gì **chưa** kiểm chứng được (Cloudflare Tunnel, Let's Encrypt thật, chạy cả bốn
   service cùng lúc).
+
+### Phiên 13 (tiếp): đối chiếu số liệu báo cáo với kết quả thật
+
+Rà từng con số trong chương 8 với các file JSON trong `results/`. **Kết quả: mọi số liệu đều truy
+được nguồn, chỉ một chỗ lệch làm tròn** — RoomNetLite Macro F1 ghi 98,99% trong khi file là 0,98996
+(99,00%). Chỗ này đáng sửa vì trong cùng bảng, accuracy 98,99% (0,98993) và macro F1 bị ghi trùng
+98,99%, tạo cảm giác chép nhầm; thực tế macro F1 cao hơn accuracy một chút, điều bình thường khi các
+lớp gần cân bằng (116–120 mẫu mỗi phòng).
+
+Đã đối chiếu và khớp: accuracy 98,99%; macro F1 99,00% (đã sửa); độ trễ suy luận 0,0367 ms; độ trễ
+end-to-end 0,0246 ms; macro F1 từng phòng (Bedroom 99,57% · Corridor 99,17% · Bathroom 98,33% ·
+LivingRoom 98,74% · Kitchen 99,17%); Val Macro F1 98,83% (room_val_metrics.json); RoomNetMT accuracy
+99,16%, macro F1 99,17%, độ trễ 0,0193 ms, act_agreement 97,32%; K-fold 97,80% ± 1,06% với khoảng tin
+cậy 95% [96,88%, 98,73%]; phát hiện bất thường hybrid precision 100% / recall 99% / F1 99,50%,
+AE-only F1 98,48%, ngưỡng 1,6089, 166 mẫu test; kích thước model 49,0 KB · 104,5 KB · 113,1 KB.
+
+Không phát hiện số liệu nào không có nguồn.
