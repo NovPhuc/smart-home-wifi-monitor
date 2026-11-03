@@ -975,3 +975,18 @@ Chương 3 trước đây chỉ 392 từ và chủ yếu là sơ đồ ASCII, th
 Tổng số từ văn xuôi: 3.677 (đầu phiên) → **7.816** (+113%). Bộ tự soát `report_style_check.py` sau
 khi siết tiếp (bỏ mã nội tuyến và nội dung trong ngoặc trước khi dò quy tắc số 3) báo **không phát
 hiện dấu hiệu văn phong AI**, tỉ lệ gạch đầu dòng 8%, không tự đạo văn.
+
+### Phiên 13 (tiếp): bổ sung mục 8.6 và 8.7 cho chương Kiểm thử
+
+Chương 8 trước chỉ có kết quả mô hình. Đã thêm hai mục về kiểm thử phần mềm và kiểm chứng triển khai,
+toàn bộ dùng số đo thật của các phiên trước:
+
+- **§8.6 Kiểm thử phần mềm, phân quyền và bảo mật**: 91 test tự động; quét phân quyền 39 tổ hợp trên
+  34 route `/api/*` với 0 tổ hợp hở; quét mã tĩnh từ 69 vấn đề (phần lớn là sai) xuống 4 vấn đề mức
+  thông tin sau khi sửa bảy lỗi độ chính xác của chính bộ quét; và mô tả lỗi ghim chứng chỉ Android
+  (lớp bảo mật tự tạo lỗ hổng) kèm cách vá và cách xác nhận bằng biên dịch lại.
+- **§8.7 Kiểm chứng triển khai**: bảng 9 hạng mục với lệnh và kết quả thật (`nginx -t` thành công,
+  compose config exit 0, gọi WSGI thô trả 200, build ảnh production thành công, container `Up
+  (healthy)` với 0 dòng `[ERROR]`, worker `gthread`, `/api/stream` trả 401 khi chưa đăng nhập), kèm
+  phần nói rõ những gì **chưa** kiểm chứng được (Cloudflare Tunnel, Let's Encrypt thật, chạy cả bốn
+  service cùng lúc).

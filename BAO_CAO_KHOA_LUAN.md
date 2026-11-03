@@ -1352,6 +1352,66 @@ Lưu ý thẳng thắn: các số liệu trên đo trên máy phát triển (Win
 thường), chưa đo trên thiết bị edge (Raspberry Pi/ESP32). Đánh giá tài nguyên
 trên thiết bị edge là việc còn lại — xem mục 10.2.
 
+### 8.6. Kiểm thử phần mềm, phân quyền và bảo mật
+
+Ba bộ kiểm tra độc lập, chạy lại được bất cứ lúc nào.
+
+**Bộ test tự động** (`pytest tests -q`): **91 test**, gồm thuật toán (chia tập, tính chỉ số, tiền xử
+lý, topology, bộ luật), tích hợp API (đăng ký, đăng nhập, phân quyền theo vai trò, mã chia sẻ, xuất
+CSV), và các test hồi quy cho từng lớp bảo mật. Mỗi lớp bảo mật có ít nhất một test chốt hành vi, ví
+dụ giới hạn số lần đăng ký theo IP, giới hạn dò mật khẩu, và việc chuyển sang Redis không được làm
+mất cấu trúc dự phòng.
+
+**Quét phân quyền** (`scripts/security_sweep.py`): liệt kê toàn bộ route từ URL map rồi gọi **không
+kèm phiên đăng nhập**, và gọi thêm một lần với bearer token sai. Kết quả: **39 tổ hợp route và
+phương thức trên 34 route `/api/*`, không tổ hợp nào trả dữ liệu**. Bốn endpoint công khai có chủ đích
+là đăng nhập, đăng xuất, đăng ký và kiểm tra sức khỏe. Cách quét này ra đời sau khi server được tách
+thành các blueprint, vì rủi ro lớn nhất của việc tách module là một endpoint mất trang trí yêu cầu
+đăng nhập mà không có gì báo lỗi.
+
+**Quét mã tĩnh** (`scripts/full_security_audit.py`) và bộ soát báo cáo
+(`scripts/report_style_check.py`). Lần chạy đầu của bộ quét mã báo 69 vấn đề, nhưng khi kiểm chứng
+từng mục thì phần lớn là sai: mẫu nhận diện thuật toán mã hoá cũ khớp cả chữ `DESC` trong `ORDER BY`
+và chữ `des` trong `description`; mẫu nhận diện ghi log lộ bí mật khớp mọi dòng có chữ `token`; phần
+kiểm tra phụ thuộc chỉ so tên gói nên báo oan cả những gói đã đủ mới. Sau khi sửa bảy lỗi độ chính
+xác của chính bộ quét, còn **4 vấn đề, tất cả ở mức thông tin** và đều là thiết kế đã được chấp nhận
+và ghi trong tài liệu bảo mật: quảng bá mDNS trong LAN, ngày hết hạn của bộ ghim chứng chỉ, và hai
+chỗ cho phép HTTP trong mạng LAN.
+
+Các lỗi bảo mật thật đã tìm và sửa trong quá trình làm được liệt kê ở mục 7, trong đó đáng chú ý
+nhất là lớp ghim chứng chỉ của ứng dụng Android. Lớp này tự viết một `X509TrustManager` chỉ kiểm tra
+ngày hết hạn của chứng chỉ mà không xác thực chuỗi tới root tin cậy, kèm một bộ kiểm tra tên miền
+luôn trả về đúng khi chưa cấu hình ghim. Ở trạng thái mặc định — tệp ghim chỉ có dòng chú thích —
+ứng dụng chấp nhận mọi chứng chỉ và mọi tên miền, tức là lớp bảo mật tự tạo ra lỗ hổng. Đã sửa bằng
+cách uỷ thác việc xác thực chuỗi cho trust store của hệ thống rồi mới áp ghim, và để nguyên cấu hình
+mặc định của Android khi chưa cấu hình ghim. Bản vá được xác nhận bằng cách biên dịch lại toàn bộ
+ứng dụng (`assembleDebug` thành công).
+
+### 8.7. Kiểm chứng triển khai
+
+Phần triển khai được kiểm bằng cách chạy thật chứ không chỉ đọc cấu hình. Kết quả:
+
+| Hạng mục | Lệnh | Kết quả |
+|---|---|---|
+| Cấu hình nginx | `nginx -t` trong container | `configuration file test is successful` |
+| Cấu hình Docker Compose | `docker compose config --quiet` | exit 0, cho cả hai tệp compose |
+| Điểm vào WSGI | gọi thẳng giao diện WSGI thô | `200 OK` cho `/api/health` |
+| Ảnh production | `docker build --target prod` | thành công, gunicorn 26.2.0 và torch 2.15.0+cpu |
+| Container chạy | `docker run` | `Up (healthy)`, **0 dòng `[ERROR]`** trong log |
+| Worker | log khởi động | `Using worker: gthread`, 2 worker, control socket trong home riêng |
+| API sau khi chạy | `GET /api/health` | `200`, `{"status":"ok","database":"ok"}` |
+| Header bảo mật | `GET /` | `200`, có `Content-Security-Policy` |
+| Bảo vệ SSE | `GET /api/stream` khi chưa đăng nhập | `401` |
+
+Sáu lỗi chặn triển khai đã được phát hiện và sửa ở bước này, trong đó hai lỗi chỉ lộ ra khi chạy
+thật: cấu hình nginx khai báo trùng khối `upstream` và dùng một tệp `include` không tồn tại trong ảnh
+`nginx:alpine`, còn ảnh production thì chạy máy chủ phát triển của Werkzeug thay vì gunicorn như tệp
+compose vẫn ghi. Chi tiết ở `docs/12_trien_khai.md`.
+
+Chưa kiểm chứng được ở máy phát triển: đường Cloudflare Tunnel cần tài khoản và token thật; chứng
+chỉ Let's Encrypt cần tên miền trỏ về IP công khai nên lần thử dùng chứng chỉ tự ký; và chưa khởi
+động đồng thời cả bốn service trong tệp compose.
+
 ## 9. TRIỂN KHAI THỰC TẾ
 
 ### 9.1. Đóng gói Docker
