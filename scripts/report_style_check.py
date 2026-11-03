@@ -139,7 +139,10 @@ def check_ai_style(prose: list[tuple[int, str]]) -> list[tuple[str, int, str]]:
         stripped = line.strip()
         if re.match(r"^[-*+]\s", stripped) or stripped.startswith("|"):
             continue
-        for sentence in re.split(r"(?<=[.!?])\s+", stripped):
+        # Bỏ `mã nội tuyến` và nội dung trong ngoặc trước khi tách: tên tham số
+        # như (`center_loss_weight`, `temporal_loss_weight`) không phải văn xuôi.
+        bare = re.sub(r"`[^`]*`|\([^)]*\)", " ", stripped)
+        for sentence in re.split(r"(?<=[.!?])\s+", bare):
             parts = re.split(r",\s*|\s+(?:và|and)\s+", sentence)
             if len(parts) != 3:
                 continue

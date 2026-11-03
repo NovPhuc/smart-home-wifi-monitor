@@ -208,12 +208,43 @@ Mục 10 tổng kết và nêu hướng phát triển. Phần phụ lục gom c�
 
 ### 3.1. WiFi Fingerprinting
 
-**Nguyên lý:** Môi trường đa đường (multipath) khiến cường độ tín hiệu nhận được (RSSI) từ các Access Point (AP) tạo ra "dấu vân tay" đặc trưng cho từng vị trí. RSSI từ nhiều AP tạo thành vector đặc trưng (fingerprint) để phân loại phòng.
+Cường độ tín hiệu nhận được tại một điểm phụ thuộc vào khoảng cách tới access point và vào cách
+sóng phản xạ trên tường, đồ đạc, cơ thể người. Trong không gian trong nhà, tia trực tiếp thường yếu
+hoặc không tồn tại; tín hiệu thu được là tổng của nhiều tia phản xạ khác pha. Chính hiện tượng đa
+đường này làm cho mức tín hiệu tại mỗi chỗ trong nhà có một tổ hợp giá trị khá ổn định theo từng
+access point. Tổ hợp đó được gọi là fingerprint, và bài toán định vị trở thành bài toán so khớp một
+vector đo được với các vector đã đo trước.
 
-**Thách thức:** RSSI biến thiên theo thời gian (nhiễu, người đi lại, thay đổi môi trường). Giải pháp:
-- **Sliding window averaging** (cửa sổ trượt 5 mẫu)
-- **Data augmentation** (thêm nhiễu Gaussian, dropout AP ngẫu nhiên)
-- **Hash BSSID** chuẩn hóa giữa thiết bị (PC netsh trả BSSID hoa, Android trả thường)
+Mỗi fingerprint là một vector có số chiều bằng số access point quan sát được; phần tử thứ *i* là
+mức RSSI nhận từ AP thứ *i*, tính bằng dBm. Giá trị này luôn âm và càng gần 0 thì tín hiệu càng
+mạnh; trong thực tế thường nằm giữa −90 dBm và −30 dBm.
+
+**Vì sao chọn RSSI mà không dùng CSI.** Chỉ số trạng thái kênh (CSI) chứa nhiều thông tin hơn vì giữ
+được cả biên độ và pha của từng sóng con. Đổi lại, đọc CSI cần phần cứng đặc thù hoặc quyền root
+trên điện thoại. RSSI thì bất kỳ điện thoại Android nào cũng đọc được ở chế độ người dùng thường,
+và nhiều router cũng cung cấp. Khóa luận chấp nhận mất mát về lượng thông tin để đổi lấy khả năng
+chạy trên thiết bị phổ thông — điều kiện để hệ thống có thể dùng trong nhà mà không cần đầu tư thêm.
+
+**Vì sao chọn mức phòng.** Ở mức toạ độ liên tục, sai số vài mét là bình thường và việc đánh giá
+phức tạp hơn nhiều. Ở mức phòng, đầu ra là một nhãn rời rạc trong danh sách phòng của căn nhà, nên
+sai số trở thành một quyết định đúng hoặc sai, dễ đo và dễ giải thích cho người dùng. Với mục tiêu
+phát hiện bất thường sinh hoạt, biết người thân đang ở phòng nào là đủ.
+
+**Nguồn nhiễu và cách xử lý.** Mức RSSI dao động do người đi lại, cửa đóng mở, và cả do hướng cầm
+điện thoại. Bốn biện pháp được dùng trong hệ thống:
+
+- *Cửa sổ trượt* gộp 5 mẫu liên tiếp (tham số `data.window_size`) để làm phẳng dao động nhanh. Cửa
+  sổ ngắn hơn thì phản ứng nhanh nhưng nhiễu hơn; 5 mẫu là mức cân bằng chọn theo thực nghiệm.
+- *Tăng cường dữ liệu* khi huấn luyện: thêm nhiễu Gauss và ngẫu nhiên bỏ một số access point, mô
+  phỏng tình huống AP không nghe thấy. Nếu không làm bước này, mô hình học thuộc đúng bộ AP của
+  ngày thu dữ liệu và giảm độ chính xác khi mang sang thiết bị khác.
+- *Giá trị thay thế cho AP bị mất* là −100 dBm (tham số `data.missing_rssi`), không dùng 0. Nếu dùng
+  0, mô hình hiểu nhầm đó là tín hiệu cực mạnh, trong khi ý nghĩa thật là "không nghe thấy".
+- *Băm BSSID* trước khi dùng làm tên chiều. Có hai lý do. Thứ nhất, địa chỉ MAC thô của access point
+  là dữ liệu có thể dùng để suy ra vị trí, không nên lưu nguyên. Thứ hai, cùng một access point
+  nhưng công cụ trên máy tính trả về chữ hoa còn Android trả về chữ thường; nếu không chuẩn hoá, hệ
+  thống coi chúng là hai AP khác nhau và fingerprint bị lệch giữa hai nguồn thu. Đây là lỗi có thật
+  đã gặp trong quá trình làm và được xử lý bằng cách viết thường địa chỉ trước khi băm.
 
 ### 3.2. Mô hình RoomNet-Lite (Phân loại phòng)
 
@@ -234,6 +265,29 @@ Input: [Batch, Channels=AP_count, Seq_len=Window_size]
 - `L_center`: Kéo embedding cùng lớp về gần nhau (Wen et al., 2016)
 - `L_temporal`: Tính liên tục giữa các dự đoán liên tiếp (smooth transition)
 
+**Vì sao dùng tích chập một chiều trên trục access point.** Vector RSSI không có thứ tự không gian —
+AP thứ ba không "gần" AP thứ tư theo nghĩa vật lý. Tuy vậy, một lớp tích chập một chiều vẫn hữu ích
+vì nó học được sự xuất hiện đồng thời của các nhóm AP: ở một phòng nào đó thường có ba AP mạnh và
+hai AP yếu, và mẫu đó lặp lại. Tích chập một chiều rẻ hơn nhiều so với mạng đầy đủ có cùng số tham
+số, và giữ được tính bất biến với thứ tự các AP trong danh sách.
+
+**Vì sao tích chập tách rời theo chiều sâu.** Bản đầy đủ của RoomNet-Lite dùng tích chập tách rời
+(depthwise separable) thay cho tích chập thường: mỗi kênh được lọc riêng rồi mới trộn kênh bằng một
+tích chập điểm. Cách này giảm mạnh số tham số mà gần như giữ nguyên chất lượng, và đây là lý do mô
+hình chạy được suy luận nhanh trên máy chủ yếu (số đo ở mục 8.5).
+
+**Hai hàm mất mát phụ.** Cross-entropy một mình chỉ quan tâm tới việc đoán đúng nhãn, không quan tâm
+các mẫu cùng phòng có nằm gần nhau trong không gian embedding hay không. CenterLoss thêm một số hạng
+`L_center = ½ · Σ ‖x_i − c_{y_i}‖²` để kéo embedding của mọi mẫu cùng phòng về tâm của phòng đó.
+Việc này quan trọng cho các bước sau: bộ lọc topology và bộ làm mượt đều làm việc trên phân bố xác
+suất, nên nếu các lớp chồng lên nhau thì các bước đó không còn nhiều tác dụng.
+
+Hàm mất mát thứ hai xử lý tính liên tục theo thời gian. Trong nhà, người không thể nhảy từ phòng ngủ
+sang nhà bếp rồi quay lại trong hai giây. Số hạng `L_temporal` đo độ lệch Jensen–Shannon giữa phân bố
+xác suất của hai lần suy luận liên tiếp và phạt những chỗ đổi đột ngột. Trọng số của hai số hạng phụ
+nằm trong `config.yaml` (`center_loss_weight`, `temporal_loss_weight`) và được chọn trên tập
+validation, không dùng tập test.
+
 ### 3.3. GRU Autoencoder (Phát hiện bất thường)
 
 Mô hình sequence-to-sequence học biểu diễn bình thường của chuỗi hoạt động:
@@ -246,6 +300,37 @@ Loss: MSE(reconstruction) + λ_room * CE(room) + λ_cont * L_continuous
 
 Ngưỡng bất thường: Quantile 0.99 trên reconstruction error của tập validation. Phát hiện: reconstruction error > ngưỡng VÀ chuyển phòng bất thường theo topology.
 
+**Đầu vào của mô hình.** Mỗi bước thời gian được biểu diễn bằng một vector đặc trưng hành vi gồm ba
+phần: phòng đang ở dưới dạng one-hot, thời gian lưu trú đã chuẩn hoá theo ngưỡng cảnh báo của phòng
+đó, và một cờ cho biết bước này có chuyển phòng hay không. Một chuỗi dài 8 bước
+(`data.anomaly_sequence_length`) được đưa vào mô hình. Cách biểu diễn này bỏ hẳn phần RSSI thô vì
+bài toán ở đây là phát hiện *kiểu sinh hoạt* bất thường, không phải phát hiện tín hiệu lạ.
+
+**Vì sao autoencoder chứ không phải bộ phân loại.** Muốn huấn luyện bộ phân loại "bình thường so với
+bất thường" thì cần dữ liệu bất thường có gán nhãn, và dữ liệu đó hầu như không thu được trong nhà
+thật: không ai muốn người thân bị ngã để có mẫu. Autoencoder đi đường vòng: chỉ học cách tái tạo
+chuỗi bình thường, rồi coi chuỗi nào tái tạo kém là bất thường. Điểm bất lợi là mô hình không phân
+biệt được *loại* bất thường, nên phần giải thích phải do bộ luật đảm nhiệm.
+
+**Vì sao chọn GRU thay vì LSTM.** GRU có hai cổng thay vì ba, ít tham số hơn trên cùng kích thước
+ẩn. Với bộ dữ liệu nhỏ như ở đây, ít tham số hơn giúp giảm nguy cơ học thuộc và huấn luyện nhanh
+hơn, trong khi khả năng ghi nhớ phụ thuộc dài hạn không phải yếu tố quyết định với chuỗi chỉ 8 bước.
+Kiến trúc GRU theo công trình của Cho và cộng sự [9].
+
+**Ngưỡng phải chọn trên tập validation, không phải tập test.** Đây là điểm từng bị làm sai trong
+phiên bản đầu và đã được sửa. Bản cũ lấy phân vị 0,99 của sai số tái tạo trên chính các ngày được
+dùng để đánh giá, nên ngưỡng được chọn vừa khít với tập test và chỉ số báo cáo cao hơn thực tế. Quy
+trình hiện tại chia ba phần không giao nhau: các ngày dùng để huấn luyện, các ngày dùng để chọn
+ngưỡng, và các ngày dùng để đánh giá. Ngưỡng được ghi lại vào `anomaly_threshold.json` kèm danh sách
+ngày test, để script đánh giá biết chính xác phải chạy trên những ngày nào.
+
+**Kết hợp với bộ luật.** Autoencoder chỉ bắt được bất thường về *hình dạng* chuỗi. Nhiều bất thường
+trong thực tế lại mang tính ngữ nghĩa và rất đơn giản để diễn đạt bằng luật: ở một phòng lâu hơn
+ngưỡng cho phép, chuyển phòng không có trong sơ đồ nhà, hoặc đi lại nhiều vào ban đêm. Bộ luật
+`RuleEngine` xử lý những trường hợp đó và đóng góp phần lớn số cảnh báo trong thực nghiệm; vai trò
+của autoencoder là nhóm bất thường về quỹ đạo mà luật không diễn đạt được. Việc tách bạch hai nguồn
+này được giữ nguyên trong phần đánh giá ở mục 8.3, thay vì gộp lại thành một con số duy nhất.
+
 ### 3.4. Phát hiện ngã (Mobile Sensor)
 
 Sử dụng gia tốc kế 3 trục trên điện thoại (100Hz):
@@ -254,12 +339,50 @@ Sử dụng gia tốc kế 3 trục trên điện thoại (100Hz):
 - **Ngưỡng impact:** Magnitude > 18g (configurable) trong 20ms → theo dõi 20s → nếu STILL > 5s → FALL_DETECTED
 - **Orientation:** Portrait/Landscape/Flat từ vector trọng lực
 
+**Cơ sở vật lý.** Khi điện thoại nằm yên, vector gia tốc đo được chủ yếu là trọng lực nên độ lớn
+xấp xỉ 1 g. Trong lúc rơi tự do, độ lớn giảm mạnh về gần 0 g. Va chạm với nền tạo ra một xung rất
+lớn trong khoảng vài chục mili giây. Sau va chạm, nếu người bị ngã thì thường nằm yên một lúc. Ba
+pha nối tiếp nhau đó — rơi, va chạm, nằm yên — là dấu hiệu phân biệt cú ngã với việc đặt điện thoại
+xuống bàn.
+
+**Vì sao dùng máy trạng thái thay vì bộ phân loại.** Một bộ phân loại trên từng mẫu gia tốc sẽ bắt
+cả những xung mạnh vô hại, ví dụ khi đặt điện thoại xuống. Máy trạng thái buộc phải có *chuỗi* sự
+kiện: một xung vượt ngưỡng đưa hệ thống sang trạng thái theo dõi, và chỉ khi sau đó tín hiệu vẫn
+yên trong một khoảng mới kết luận là ngã. Cách này dễ giải thích và dễ chỉnh ngưỡng theo từng thiết
+bị hơn, đổi lại phải chọn ngưỡng bằng tay.
+
+Hướng cầm máy được suy ra từ chính vector trọng lực: khi người dùng nhìn màn hình thì trục nào chiếm
+ưu thế trong vector đó là trục dọc của máy. Hướng cầm không dùng để phát hiện ngã, mà để gắn nhãn cho
+mẫu thu thập, vì biểu diễn RSSI thay đổi theo hướng cầm điện thoại.
+
+**Giới hạn cần nói rõ.** Phần này chỉ hoạt động khi người được giám sát mang theo điện thoại và ứng
+dụng đang mở; trình duyệt trên điện thoại tự giảm tần suất đọc cảm biến khi ứng dụng chạy nền. Đây
+là lý do phần này được thiết kế như một tuỳ chọn cộng thêm chứ không phải nguồn dữ liệu chính, và
+mục 8.4 ghi nhận là **chưa kiểm thử** với người ngã thật.
+
 ### 3.5. Topology-aware Filtering
 
 Sử dụng đồ thị chuyển phòng (topology) để lọc dự đoán:
 - Ma trận chuyển trạng thái T[i][j] = 1 nếu phòng i kề phòng j
 - Viterbi-like filter: `P_t = normalize(T^T * P_{t-1} * likelihood_t)`
 - Loại bỏ chuyển phòng không hợp lý (nhảy từ Phòng ngủ → Phòng bếp không qua Phòng khách)
+
+Đây là một phép cập nhật Bayes rút gọn. Phân bố ở bước trước đóng vai trò tiên nghiệm, ma trận kề
+đóng vai trò xác suất chuyển, và đầu ra của mô hình phân loại đóng vai trò hàm hợp lý. Kết quả được
+chuẩn hoá lại thành phân bố xác suất để dùng cho bước kế tiếp.
+
+Ma trận kề được khai báo thủ công trong `config.yaml` theo bố cục thật của căn nhà (`room_topology`),
+vì không có cách nào suy ra từ dữ liệu rằng phòng ngủ và nhà bếp không kề nhau. Cách khai báo này
+cũng là điểm dễ mở rộng: thêm phòng mới thì sửa một dòng cấu hình.
+
+Tham số `topology.self_weight` quyết định mức ưu tiên cho khả năng ở lại phòng cũ so với chuyển đi,
+được đặt 0,75. Đặt cao hơn 0,5 vì trong nhà, phần lớn các bước thời gian là người vẫn ở nguyên một
+chỗ; nếu để thấp, bộ lọc sẽ đổi phòng theo từng dao động nhỏ của RSSI. Giá trị này được chọn trên
+tập validation cùng lúc với các tham số khác.
+
+Ý tưởng dùng một meta-model và tách hai pha học và theo dõi được tham khảo từ FIND3 [4], còn cách
+chia sẻ encoder giữa hai đầu ra được tham khảo từ ARIL [3]. Khóa luận không dùng lại mã nguồn của
+các dự án đó; phần đọc mã chỉ để đối chiếu cách tổ chức trước khi tự viết.
 
 ---
 

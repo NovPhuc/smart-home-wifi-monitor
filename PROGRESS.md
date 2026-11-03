@@ -950,3 +950,28 @@ song song thật ngắn và bỏ qua dòng gạch đầu dòng/bảng; chỉ l�
 
 **Sinh lại `BAO_CAO_KHOA_LUAN.docx`** bằng `make_thesis_docx.py`: Times New Roman 13, giãn dòng 1.5,
 lề trái 3 / phải 2 / trên-dưới 2.5 cm, 1079 đoạn, 14 bảng.
+
+### Phiên 13 (tiếp): mở rộng chương 3 — Cơ sở lý thuyết
+
+Chương 3 trước đây chỉ 392 từ và chủ yếu là sơ đồ ASCII, thiếu phần giải thích. Đã viết lại thành
+**2.423 từ**, giữ nguyên các sơ đồ và bổ sung phần "vì sao":
+
+- §3.1: cơ sở vật lý của đa đường, lý do chọn RSSI thay vì CSI, lý do chọn mức phòng thay vì toạ độ,
+  bốn nguồn nhiễu và cách xử lý (cửa sổ trượt, tăng cường dữ liệu, giá trị thay thế −100 dBm cho AP
+  mất, băm BSSID kèm lỗi chữ hoa/chữ thường giữa PC và Android).
+- §3.2: vì sao tích chập 1D trên trục AP vẫn hữu ích dù không có thứ tự không gian; vì sao dùng tích
+  chập tách rời theo chiều sâu; công thức CenterLoss và lý do cần nó cho các bước lọc phía sau; số
+  hạng Jensen–Shannon cho tính liên tục theo thời gian.
+- §3.3: ba thành phần của vector đặc trưng hành vi; vì sao autoencoder thay vì bộ phân loại (không có
+  mẫu bất thường gán nhãn); vì sao GRU thay vì LSTM; **quy trình chọn ngưỡng trên validation, không
+  dùng tập test** kèm giải thích đây là lỗi rò rỉ của bản đầu đã được sửa; lý do kết hợp thêm bộ luật.
+- §3.4: ba pha vật lý của cú ngã (rơi – va chạm – nằm yên); vì sao dùng máy trạng thái thay vì phân
+  loại từng mẫu; hướng cầm máy suy từ vector trọng lực; giới hạn (phải mang điện thoại, ứng dụng đang
+  mở) và ghi rõ phần này chưa kiểm thử.
+- §3.5: giải thích bộ lọc topology là cập nhật Bayes rút gọn; vì sao ma trận kề phải khai báo thủ công;
+  ý nghĩa tham số `self_weight = 0,75`; nguồn gốc ý tưởng từ FIND3 và ARIL kèm câu nói rõ **không
+  dùng lại mã nguồn của các dự án đó**.
+
+Tổng số từ văn xuôi: 3.677 (đầu phiên) → **7.816** (+113%). Bộ tự soát `report_style_check.py` sau
+khi siết tiếp (bỏ mã nội tuyến và nội dung trong ngoặc trước khi dò quy tắc số 3) báo **không phát
+hiện dấu hiệu văn phong AI**, tỉ lệ gạch đầu dòng 8%, không tự đạo văn.
