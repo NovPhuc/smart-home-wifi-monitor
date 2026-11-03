@@ -57,6 +57,112 @@ Xây dựng hệ thống giám sát người cao tuổi trong nhà thông minh v
 - Phát hiện ngã: chỉ hoạt động khi người cao tuổi mang điện thoại (tùy chọn)
 - Không thay thế thiết bị y tế chuyên dụng - chỉ là hỗ trợ cảnh báo sớm
 
+### 1.4. Nghiên cứu liên quan
+
+**Định vị trong nhà bằng WiFi.** Hướng tiếp cận này bắt đầu từ RADAR [2], nơi vị trí được suy ra
+từ vector cường độ tín hiệu thu (RSSI) của nhiều access point và đối chiếu với một cơ sở dữ liệu
+fingerprint đã đo trước. RADAR dùng k-nearest neighbours trên khoảng cách Euclid và trả về toạ độ
+liên tục trong mặt bằng. Các công trình sau đó chuyển sang mô hình xác suất (Horus) và học sâu
+(DeepFi, CiFi), chủ yếu để tăng độ chính xác ở mức toạ độ. Khóa luận này đặt bài toán ở **mức
+phòng** chứ không phải toạ độ: đầu ra là một nhãn rời rạc trong danh sách phòng của căn nhà. Cách
+đặt vấn đề đó biến bài toán thành phân loại nhiều lớp thay vì hồi quy, và phù hợp với nhu cầu thực
+tế của gia đình — biết người thân đang ở phòng nào là đủ để phát hiện bất thường, không cần biết
+chính xác đang đứng ở mét thứ mấy.
+
+**Học đa nhiệm trên fingerprint WiFi.** ARIL [3] là công trình gần với khóa luận nhất: một bộ mã
+hoá dùng chung cho hai đầu ra là hoạt động và vị trí, với lập luận rằng hai bài toán bổ trợ cho
+nhau. Khóa luận áp dụng đúng ý tưởng đó cho lớp `RoomNetMT`: một encoder chung, hai head (phòng và
+hoạt động bốn lớp). Khác biệt nằm ở chỗ ARIL dùng dữ liệu CSI còn khóa luận dùng RSSI — lựa chọn
+này xuất phát từ ràng buộc thiết bị, trình bày ở mục 1.5.
+
+**Tín hiệu WiFi cho nhận diện hoạt động.** Ngoài vị trí, sự biến thiên RSSI giữa các lần quét mang
+thông tin về mức độ chuyển động trong phòng. Các nghiên cứu về WiFi sensing khai thác điều này để
+phân loại hoạt động. Khóa luận dùng một biến thể đơn giản hơn: độ lệch RSSI trung vị giữa các cửa
+sổ, phân thành bốn mức (đứng yên, hoạt động nhẹ, đang di chuyển, vừa chuyển phòng). Cách này không
+cần dữ liệu gán nhãn hoạt động, mà suy nhãn từ chính bộ luật phát hiện bất thường.
+
+**Phát hiện bất thường cho người cao tuổi.** Hướng phổ biến là học phân bố của chuỗi hoạt động
+bình thường rồi đánh dấu những chuỗi lệch khỏi phân bố đó. Autoencoder hồi tiếp (GRU-AE) là lựa
+chọn thường gặp vì không cần dữ liệu bất thường khi huấn luyện. Khóa luận dùng GRU-AE để tính sai
+số tái tạo, nhưng kết hợp thêm một bộ luật tường minh (lưu trú quá lâu, chuyển phòng không hợp
+`room_topology`, di chuyển ban đêm). Kết quả ở mục 8 cho thấy phần lớn tín hiệu cảnh báo đến từ bộ
+luật; GRU-AE đóng góp ở nhóm bất thường về quỹ đạo. Việc tách bạch hai nguồn này quan trọng cho
+phần đánh giá, vì nếu gộp lại thì không biết mô hình học được gì.
+
+**Phát hiện ngã.** Các hệ thống thương mại thường dùng thiết bị đeo với gia tốc kế và con quay.
+Khóa luận không làm thiết bị đeo; phần phát hiện ngã dùng cảm biến của điện thoại và chỉ hoạt động
+khi điện thoại đang mở ứng dụng. Đây là hạn chế đã biết và được ghi rõ ở mục 8.4, không được tính
+là kết quả đã kiểm chứng.
+
+### 1.5. Đối chiếu với các dự án mã nguồn mở
+
+Với các thành phần chưa có kinh nghiệm, khóa luận đọc mã nguồn của dự án đang dùng rộng rãi để đối
+chiếu cách làm trước khi tự viết, thay vì bắt đầu từ con số không.
+
+| Dự án | Lấy gì | Không lấy gì |
+|---|---|---|
+| **FIND3** (`schollz/find3`) | Quy trình tách hai pha *learn* và *track*, và ý tưởng dùng một meta-model chọn mô hình tốt nhất theo từng vị trí | Kiến trúc dịch vụ và cơ chế đồng bộ nhiều server của FIND3 — quá nặng cho phạm vi một căn nhà |
+| **ARIL** (`geekfeiw/ARIL`) | Cấu trúc encoder dùng chung cho hai head (vị trí và hoạt động) | Đầu vào CSI; khóa luận chỉ có RSSI |
+| **Home Assistant** | Cách tổ chức thực thể theo nhà và cách phát cảnh báo ra ngoài | Toàn bộ mô hình tích hợp thiết bị — khóa luận chỉ cần WiFi và điện thoại |
+| **ntfy.sh** | Giao thức đẩy cảnh báo đơn giản qua HTTP POST | Không tự viết lại; dùng nguyên dịch vụ |
+| **OWASP Top 10** | Danh mục kiểm tra cho phần bảo mật | Không áp nguyên si; chọn các mục liên quan tới ứng dụng chạy trong LAN |
+
+Việc đối chiếu này dẫn tới hai quyết định thiết kế. Thứ nhất, **dùng RSSI thay vì CSI**: đọc CSI cần
+phần cứng đặc thù (ESP32 có công cụ riêng) hoặc quyền root trên điện thoại, trong khi RSSI đọc được
+từ bất kỳ điện thoại Android nào và từ router. Đổi lại độ chính xác thấp hơn, được bù bằng việc chỉ
+yêu cầu độ phân giải mức phòng. Thứ hai, **tự chứa thay vì phụ thuộc dịch vụ đám mây**: dữ liệu vị
+trí là dữ liệu riêng tư, nên toàn bộ suy luận chạy trên máy chủ trong nhà; chỉ cảnh báo mới được
+đẩy ra ngoài, và chỉ khi chủ nhà tự cấu hình webhook.
+
+Cần nói rõ để tránh hiểu nhầm về đóng góp: các mô hình học máy trong khóa luận đều dựa trên công
+trình đã công bố, không có kiến trúc nào do khóa luận phát minh. Phần làm mới nằm ở việc ghép chúng
+thành một hệ thống chạy được trên thiết bị phổ thông, ở cách đánh giá tách bạch (mục 8), và ở các
+lớp kỹ thuật phục vụ vận hành thực tế (mục 7 và 9).
+
+### 1.6. Phương pháp thực hiện
+
+Khóa luận đi theo trình tự sau, mỗi bước đều để lại kết quả kiểm chứng được:
+
+1. **Khảo sát yêu cầu** từ đề cương chi tiết của học phần, chuyển thành danh sách chức năng và chỉ
+   tiêu đo được (định vị trên 85% ở tập test, cảnh báo trong vòng vài giây).
+2. **Thu thập và chuẩn hoá dữ liệu.** Bộ dữ liệu tổng hợp được dựng theo bố cục căn hộ hai phòng
+   ngủ và một hành lang, có nhiễu thiết bị và hiện tượng mất tín hiệu; phiên bản hai được làm khó
+   hơn sau khi phát hiện phiên bản đầu quá dễ (xem mục 8.2). Dữ liệu được chia theo *phiên* thu,
+   không chia theo mẫu, để tránh rò rỉ thông tin giữa các tập.
+3. **Huấn luyện và đánh giá mô hình.** Ba mô hình định vị được so sánh trên cùng một cách chia tập;
+   kết quả được lưu thành JSON trong `results/` để mọi số liệu trong báo cáo truy được về nguồn.
+4. **Xây dựng hệ thống.** Flask và SQLite ở phía máy chủ, PWA cho giao diện, ứng dụng Android cho
+   phần thu thập, và các blueprint tách theo miền chức năng.
+5. **Soát bảo mật.** Đối chiếu với OWASP Top 10 ở phần liên quan, kiểm tra bằng script quét phân
+   quyền và script quét mã, ghi lại từng lỗi và cách sửa.
+6. **Đóng gói và kiểm chứng triển khai.** Docker đa tầng, gunicorn, hai phương án đưa ra Internet
+   (Cloudflare Tunnel hoặc VPS kèm chứng chỉ), và chạy thử để xác nhận cấu hình hoạt động.
+
+Nguyên tắc xuyên suốt: **không ghi vào báo cáo con số nào chưa chạy ra**. Kết quả nào chưa đo được
+thì ghi rõ là chưa kiểm thử, ví dụ phần phát hiện ngã ở mục 8.4.
+
+### 1.7. Đóng góp của khóa luận
+
+- Một hệ thống hoàn chỉnh chạy được từ đầu tới cuối: thu fingerprint, huấn luyện, suy luận thời
+  gian thực, cảnh báo, và giao diện quản trị nhiều căn nhà.
+- Lớp `RoomNetMT` học đa nhiệm trên RSSI, dùng encoder chung cho vị trí và hoạt động, với nhãn hoạt
+  động được suy tự động từ bộ luật thay vì cần dữ liệu gán nhãn thủ công.
+- Quy trình đánh giá tách bạch: ba tập train/validation/test chia theo phiên, K-fold, và các
+  baseline cổ điển (kNN, Random Forest, MLP, SimpleCNN) để so sánh.
+- Các lớp kỹ thuật phục vụ vận hành: phân quyền theo nhà và theo vai trò, hạn mức tần suất lưu trong
+  RAM hoặc Redis tuỳ quy mô triển khai, và bộ kiểm tra bảo mật chạy lại được.
+- Bộ công cụ triển khai: Docker Compose nhiều service, hai đường ra Internet, và tài liệu vận hành
+  kèm bảng xử lý sự cố.
+
+### 1.8. Cấu trúc báo cáo
+
+Mục 2 trình bày kiến trúc tổng thể và luồng dữ liệu. Mục 3 là cơ sở lý thuyết của ba mô hình dùng
+trong hệ thống. Mục 4 mô tả thiết kế qua các sơ đồ use case, sequence, class, state và deployment.
+Mục 5 nói về phần cứng tối thiểu và cách bố trí access point. Mục 6 là phần phát triển phần mềm,
+chi tiết nhất vì chiếm phần lớn khối lượng công việc. Mục 7 trình bày các lớp bảo mật cùng lý do
+lựa chọn. Mục 8 là kết quả đo được, kèm cả những phần chưa kiểm thử. Mục 9 hướng dẫn triển khai.
+Mục 10 tổng kết và nêu hướng phát triển. Phần phụ lục gom các thao tác cài đặt và tra cứu nhanh.
+
 ---
 
 ## 2. TỔNG QUAN HỆ THỐNG
@@ -995,8 +1101,41 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')" || exit 1
 
-CMD ["python", "server/app.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", \
+     "--worker-class", "gthread", "--workers", "2", "--threads", "8", \
+     "--timeout", "300", "server.wsgi:application"]
 ```
+
+Worker `gthread` được chọn thay vì `sync` vì dashboard dùng Server-Sent Events ở `/api/stream`:
+worker đồng bộ giữ trọn một tiến trình cho mỗi kết nối SSE và chặn các request khác. Người dùng
+`appuser` cũng được tạo thư mục home riêng, vì gunicorn 26 mở một control socket trong `$HOME` và
+`useradd -r` không tạo thư mục này.
+
+### 7.6. Hạn mức tần suất khi chạy nhiều tiến trình
+
+Hạn mức ở mục 7.3 mặc định nằm trong RAM của từng tiến trình. Cách đó đủ cho một tiến trình duy
+nhất, nhưng khi chạy nhiều worker hoặc nhiều container thì mỗi tiến trình giữ một bộ đếm riêng, và
+giới hạn thực tế nhân lên theo số tiến trình. Với hai worker, ngưỡng 30 request mỗi phút cho nhóm
+`auth` trở thành 60.
+
+Đặt biến `REDIS_HOST` thì bộ đếm chuyển sang Redis dùng chung. Toàn bộ thao tác *cắt cửa sổ, đếm,
+kiểm tra trạng thái chặn và ghi nhận request* được gộp vào một script Lua, nên Redis thực thi trọn
+vẹn trong một lượt. Nếu tách thành hai lượt đọc rồi ghi, hai request đến cùng lúc đều thấy cửa sổ
+còn chỗ và cùng ghi; đo trên máy phát triển với 60 request đồng thời và ngưỡng 10, bản hai lượt cho
+qua 29 request, bản dùng Lua cho qua đúng 10.
+
+Khoá định danh client chỉ dùng địa chỉ IP, không trộn thêm `User-Agent`. `User-Agent` do phía gọi
+tự khai, nên nếu đưa vào khoá thì chỉ cần đổi giá trị đó mỗi request là có một bộ đếm mới và vượt
+được hạn mức. Trường `X-Forwarded-For` cũng chỉ được tin khi biến `SMART_HOME_TRUST_PROXY` được bật,
+tức là khi máy chủ thật sự nằm sau một reverse proxy tin cậy.
+
+Khi Redis không nối được, ứng dụng ghi cảnh báo rồi lùi về chế độ RAM cho tiến trình đó. Việc ghi
+cảnh báo là bắt buộc: nếu im lặng, người vận hành sẽ tưởng hạn mức vẫn đang được chia sẻ trong khi
+thực tế mỗi tiến trình đếm riêng.
+
+Còn lại chưa chuyển sang Redis: trạng thái cảm biến chuyển động, lịch sử suy luận tạm thời và tiến
+độ huấn luyện vẫn nằm trong RAM từng tiến trình. Muốn chạy nhiều instance thật thì các phần này
+cũng phải chuyển đi, hoặc phải ghim mỗi căn nhà vào một instance cố định.
 
 ---
 
@@ -1188,14 +1327,20 @@ rate limit nhiều tầng. Các hướng dưới đây là phương án **nếu*
 
 ## 11. TÀI LIỆU THAM KHẢO
 
-1. Wen, Y., Zhang, K., Li, Z., & Qiao, Y. (2016). A Discriminative Feature Learning Approach for Deep Face Recognition. *ECCV 2016*. (Cảm hứng CenterLoss trong RoomNetLite.)
-2. Bahl, P., & Padmanabhan, V. N. (2000). RADAR: An In-Building RF-based User Location and Tracking System. *IEEE INFOCOM 2000*. (Nền tảng WiFi fingerprinting.)
-3. Wang, F., Feng, J., Zhao, Y., Zhang, X., Zhang, S., & Han, J. (2019). Joint Activity Recognition and Indoor Localization with WiFi Fingerprints. *IEEE Access*; arXiv:1904.04964. (Tham khảo multi-task cho RoomNet-MT; mã nguồn mở geekfeiw/ARIL.)
-4. Scholl, Z. (2019). FIND3 — Framework for Internal Navigation and Discovery. https://github.com/schollz/find3. (Tham khảo quy trình learn/track và meta-learning.)
-5. Goodfellow, I., Bengio, Y., & Courville, A. (2016). *Deep Learning*. MIT Press.
-6. Pedregosa, F., et al. (2011). Scikit-learn: Machine Learning in Python. *Journal of Machine Learning Research*, 12.
-7. OWASP Foundation. *OWASP Top 10:2021*. https://owasp.org/Top10/
-8. Cloudflare. *Cloudflare Tunnel Documentation*. https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+1. Wen, Y., Zhang, K., Li, Z., & Qiao, Y. (2016). A Discriminative Feature Learning Approach for Deep Face Recognition. *Computer Vision – ECCV 2016*, LNCS 9911, 499–515. (Cảm hứng cho CenterLoss trong RoomNetLite.)
+2. Bahl, P., & Padmanabhan, V. N. (2000). RADAR: An In-Building RF-based User Location and Tracking System. *Proceedings of IEEE INFOCOM 2000*, 775–784. (Nền tảng của WiFi fingerprinting.)
+3. Wang, F., Feng, J., Zhao, Y., Zhang, X., Zhang, S., & Han, J. (2019). Joint Activity Recognition and Indoor Localization with WiFi Fingerprints. *IEEE Access*, 7, 80058–80068. Bản công khai: arXiv:1904.04964, https://arxiv.org/abs/1904.04964. Mã nguồn: https://github.com/geekfeiw/ARIL. (Tham khảo cho kiến trúc đa nhiệm RoomNetMT.)
+4. Scholl, Z. (2019). FIND3 — Framework for Internal Navigation and Discovery. https://github.com/schollz/find3 (truy cập 2026-10-30). (Tham khảo quy trình learn/track và ý tưởng meta-model.)
+5. Goodfellow, I., Bengio, Y., & Courville, A. (2016). *Deep Learning*. MIT Press. ISBN 978-0-262-03561-3.
+6. Pedregosa, F., Varoquaux, G., Gramfort, A., et al. (2011). Scikit-learn: Machine Learning in Python. *Journal of Machine Learning Research*, 12, 2825–2830. https://jmlr.org/papers/v12/pedregosa11a.html
+7. OWASP Foundation. (2021). *OWASP Top 10:2021 — The Ten Most Critical Web Application Security Risks*. https://owasp.org/Top10/ (truy cập 2026-11-01).
+8. Cloudflare. (2026). *Cloudflare Tunnel Documentation*. https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/ (truy cập 2026-11-02).
+9. Cho, K., van Merriënboer, B., Gulcehre, C., et al. (2014). Learning Phrase Representations using RNN Encoder–Decoder for Statistical Machine Translation. *EMNLP 2014*. Bản công khai: arXiv:1406.1078, https://arxiv.org/abs/1406.1078. (Nguồn của đơn vị GRU dùng trong bộ phát hiện bất thường.)
+10. PyTorch Foundation. (2026). *PyTorch documentation*. https://pytorch.org/docs/ (truy cập 2026-11-02).
+
+*Ghi chú:* các bài hội nghị ở mục 1, 2 và 9 nên bổ sung DOI của nhà xuất bản trước khi nộp chính
+thức. Báo cáo này cố ý không ghi DOI khi chưa đối chiếu được với trang của nhà xuất bản, để tránh
+đưa vào một mã định danh không kiểm chứng.
 
 ## 12. PHỤ LỤC
 

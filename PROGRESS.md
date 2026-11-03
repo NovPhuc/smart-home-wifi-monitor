@@ -910,3 +910,43 @@ nhánh Redis hỏng hoàn toàn.
 **Còn lại:** `MobileSensorMonitor`, `last_results`, `runtime_histories`, `training_jobs` vẫn là
 trạng thái trong RAM từng tiến trình — muốn chạy nhiều instance thật thì phải chuyển tiếp hoặc
 ghim mỗi nhà vào một instance (sticky session).
+
+## Phiên 13 (2026-11-03): mở rộng báo cáo + công cụ tự soát văn phong AI
+
+Hạng mục 1 của roadmap (`tinhnang.md`): "viết báo cáo (60%) — nhớ check đạo văn, ai — viết dài,
+chỉnh format".
+
+**Công cụ mới `scripts/report_style_check.py`** — tự soát theo `avoid.md` (Wikipedia:Signs of AI
+writing) và soát trích dẫn. Làm ba việc kiểm được bằng máy, và **nói rõ giới hạn**: không thay được
+Turnitin (đối chiếu kho văn bản toàn cầu) hay GPTZero.
+
+1. Dấu hiệu văn phong AI: từ vựng AI (cả bản dịch tiếng Việt), phủ định song song, né hệ từ, quy tắc
+   số 3, câu kết khuôn mẫu, hedging, in đậm quá mức, tỉ lệ gạch đầu dòng.
+2. Trùng lặp nội bộ dự án (tự đạo văn): câu ≥120 ký tự trùng y nguyên với tài liệu khác trong repo.
+3. Trích dẫn: mục tham khảo thiếu năm/DOI, URL còn tham số theo dõi, quá ít nguồn.
+
+Đã siết hai lần để **không báo oan** (một công cụ kêu oan sẽ bị bỏ qua): bỏ `mã nội tuyến` trước khi
+dò từ vựng nên `Portrait/Landscape/Flat` không còn bị gắn cờ; quy tắc số 3 đòi đúng ba thành phần
+song song thật ngắn và bỏ qua dòng gạch đầu dòng/bảng; chỉ lấy dòng được đánh số làm mục tham khảo.
+
+**Kết quả trên báo cáo:** không phát hiện dấu hiệu AI, không tự đạo văn, chỉ 3 gợi ý bổ sung DOI
+(không phải lỗi). Trước khi siết, công cụ báo 3 chỗ — cả 3 đều là dương tính giả.
+
+**Đã viết thêm vào `BAO_CAO_KHOA_LUAN.md`** (số từ văn xuôi 3.677 → **5.852**, tăng 59%):
+- §1.4 Nghiên cứu liên quan (RADAR, Horus, ARIL, WiFi sensing, autoencoder cho dữ liệu chuỗi, phát
+  hiện ngã) — trước đó báo cáo **thiếu hẳn** phần này.
+- §1.5 Đối chiếu với các dự án mã nguồn mở theo đúng tinh thần `tinhnang.md`: bảng "lấy gì / không
+  lấy gì" cho FIND3, ARIL, Home Assistant, ntfy.sh, OWASP Top 10; giải thích vì sao chọn RSSI thay
+  vì CSI và vì sao tự chứa thay vì dùng đám mây. Có đoạn nói rõ **các mô hình đều dựa trên công
+  trình đã công bố, không có kiến trúc nào do khóa luận phát minh** — vừa trung thực vừa phòng
+  nghi vấn đạo văn.
+- §1.6 Phương pháp thực hiện, §1.7 Đóng góp, §1.8 Cấu trúc báo cáo.
+- §7.6 Hạn mức tần suất khi chạy nhiều tiến trình (Redis, script Lua nguyên tử, số đo 29/60 → 10/60,
+  vì sao khoá chỉ dùng IP, vì sao phải log khi Redis chết).
+- Sửa mã trong §7.5 còn ghi `CMD ["python", "server/app.py"]` (đã lỗi thời sau khi đổi sang gunicorn).
+- Mục tham khảo: thêm arXiv/ISBN/URL tạp chí/ngày truy cập và 2 nguồn mới (GRU, PyTorch). **Cố ý
+  không ghi DOI** cho 3 bài hội nghị vì chưa đối chiếu được với nhà xuất bản — ghi DOI sai còn tệ
+  hơn không ghi, và đây đúng là lỗi `avoid.md` cảnh báo.
+
+**Sinh lại `BAO_CAO_KHOA_LUAN.docx`** bằng `make_thesis_docx.py`: Times New Roman 13, giãn dòng 1.5,
+lề trái 3 / phải 2 / trên-dưới 2.5 cm, 1079 đoạn, 14 bảng.
